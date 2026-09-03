@@ -180,6 +180,17 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;st
 .pay-row .a{font-family:'Fraunces',serif;font-weight:600;font-size:15px}
 .pay-row .t{font-size:12px;color:var(--sage);font-weight:700}
 
+.earn-strip .row3 .v.exp{color:var(--danger)}
+.exp-row{
+  display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px;
+}
+.exp-row .d{font-size:12.5px;color:var(--muted);min-width:52px}
+.exp-row .info{flex:1;min-width:0}
+.exp-row .cat{font-weight:700;font-size:14.5px}
+.exp-row .nt{font-size:12.5px;color:var(--ink-soft)}
+.exp-row .a{font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:var(--danger)}
+
 /* ---------- Modal sheet ---------- */
 .veil{position:fixed;inset:0;background:rgba(51,34,44,.45);z-index:50;display:none}
 .veil.open{display:block}
@@ -254,17 +265,18 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;st
    ========================================================= */
 const LS_KEY='hyona_studio_v1';
 const SERVICES=['Haircut','Color','Perm','Highlights','Blowout','Treatment','Style','Other'];
+const EXPENSE_CATS=['Supplies','Products','Rent','Utilities','Equipment','Other'];
 
 let db=load();
 function load(){
-  try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients)return d;}catch(e){}
-  return {appts:[],clients:[]};
+  try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients){if(!d.expenses)d.expenses=[];return d;}}catch(e){}
+  return {appts:[],clients:[],expenses:[]};
 }
 function save(){localStorage.setItem(LS_KEY,JSON.stringify(db));}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
 /* ---------- date helpers ---------- */
-const fmt$=n=>'$'+(Math.round(n*100)/100).toLocaleString('en-US',{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2});
+const fmt$=n=>{const s=n<0?'-':'';const v=Math.abs(Math.round(n*100)/100);return s+'$'+v.toLocaleString('en-US',{minimumFractionDigits:(v%1?2:0),maximumFractionDigits:2});};
 function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function parseYmd(s){const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c);}
 const todayStr=()=>ymd(new Date());
@@ -310,11 +322,12 @@ function render(){
   else if(view==='clients')renderClients();
   else renderEarn();
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
-  document.getElementById('fab').style.display=(view==='earn')?'none':'flex';
+  document.getElementById('fab').style.display='flex';
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;render();});
 document.getElementById('fab').onclick=()=>{
   if(view==='clients')clientForm();
+  else if(view==='earn')expenseForm();
   else apptForm(null,view==='cal'?calSel:todayStr());
 };
 
@@ -353,6 +366,7 @@ function renderToday(){
   const tip=pays.reduce((s,a)=>s+a.payment.tip,0);
   const upcoming=appts.filter(a=>a.status==='booked');
   const doneList=appts.filter(a=>a.status!=='booked');
+  const fresh=!db.appts.length&&!db.clients.length&&!db.expenses.length;
 
   main.innerHTML=`
     <div class="head"><h1>Today</h1><div class="date">${niceDate(t)}</div></div>
@@ -366,12 +380,14 @@ function renderToday(){
       </div>
     </div>
     <div class="sec-t">Up next</div>
-    ${upcoming.length?upcoming.map(apptRow).join(''):`<div class="empty">No appointments scheduled.<br>Tap + to book one.</div>`}
+    ${upcoming.length?upcoming.map(apptRow).join(''):`<div class="empty">No appointments scheduled.<br>Tap + to book one.${fresh?'<br><br><button class="chip" id="sampleBtn" style="background:var(--rose);border-color:var(--rose);color:#fff">See it with example data</button>':''}</div>`}
     ${doneList.length?`<div class="sec-t">Finished</div>${doneList.map(apptRow).join('')}`:''}
     <button class="settings-link" id="backupBtn">Back up / restore data</button>
   `;
   bindApptRows(main);
   document.getElementById('backupBtn').onclick=backupSheet;
+  const sb=document.getElementById('sampleBtn');
+  if(sb)sb.onclick=loadSample;
 }
 
 /* =========================================================
@@ -671,11 +687,17 @@ function rangeFor(mode){
 function paysBetween(from,to){
   return db.appts.filter(a=>a.status==='done'&&a.payment&&a.date>=from&&a.date<=to);
 }
+function expensesBetween(from,to){
+  return db.expenses.filter(e=>e.date>=from&&e.date<=to);
+}
 function renderEarn(){
   const r=rangeFor(earnMode);
   const pays=paysBetween(r.from,r.to).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
   const svc=pays.reduce((s,a)=>s+a.payment.amount,0);
   const tip=pays.reduce((s,a)=>s+a.payment.tip,0);
+  const exps=expensesBetween(r.from,r.to).sort((a,b)=>b.date.localeCompare(a.date));
+  const expTotal=exps.reduce((s,e)=>s+e.amount,0);
+  const net=svc+tip-expTotal;
 
   /* chart buckets */
   let buckets=[];
@@ -714,6 +736,11 @@ function renderEarn(){
         <div><div class="k">Tips</div><div class="v tip">${fmt$(tip)}</div></div>
         <div><div class="k">Clients</div><div class="v">${pays.length}</div></div>
       </div>
+      <div class="row3">
+        <div><div class="k">Expenses</div><div class="v exp">${expTotal?'\u2212'+fmt$(expTotal):'$0'}</div></div>
+        <div><div class="k">Net</div><div class="v">${fmt$(net)}</div></div>
+        <div></div>
+      </div>
     </div>
     <div class="chart">
       ${bdata.map(b=>{
@@ -740,8 +767,84 @@ function renderEarn(){
         <div class="amts"><div class="a">${fmt$(a.payment.amount+a.payment.tip)}</div>${a.payment.tip?`<div class="t">+${fmt$(a.payment.tip)} tip</div>`:''}</div>
       </div>`).join('')
     :`<div class="empty">No payments in this period yet.</div>`}
+    <div class="sec-t">Expenses</div>
+    ${exps.length?exps.map(e=>`
+      <div class="exp-row tap" data-id="${e.id}" role="button" tabindex="0">
+        <div class="d">${niceDate(e.date,true)}</div>
+        <div class="info"><div class="cat">${esc(e.category)}</div>${e.note?`<div class="nt">${esc(e.note)}</div>`:''}</div>
+        <div class="a">\u2212${fmt$(e.amount)}</div>
+      </div>`).join('')
+    :`<div class="empty">No expenses recorded.<br>Tap + to add supplies, rent, utilities\u2026</div>`}
   `;
   main.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{earnMode=b.dataset.m;render();});
+  main.querySelectorAll('.exp-row').forEach(el=>{
+    el.onclick=()=>expenseForm(el.dataset.id);
+    el.onkeydown=ev=>{if(ev.key==='Enter')expenseForm(el.dataset.id);};
+  });
+}
+
+/* ---------- expense form ---------- */
+function expenseForm(id){
+  const e=id?db.expenses.find(x=>x.id===id):null;
+  openSheet(`
+    <h2 class="serif">${e?'Edit expense':'New expense'}</h2>
+    <div class="fld"><label>Category</label>
+      <div class="chips" id="ecChips">
+        ${EXPENSE_CATS.map(c=>`<button type="button" class="chip ${e&&e.category===c?'on':''}" data-c="${c}">${c}</button>`).join('')}
+      </div>
+    </div>
+    <div class="fld-row">
+      <div class="fld"><label>Amount ($)</label><input id="e-amt" type="number" inputmode="decimal" min="0" step="0.01" value="${e?e.amount:''}"></div>
+      <div class="fld"><label>Date</label><input id="e-date" type="date" value="${e?e.date:todayStr()}"></div>
+    </div>
+    <div class="fld"><label>Note (optional)</label><input id="e-note" value="${e?esc(e.note||''):''}" placeholder="e.g. color tubes, water bill" autocomplete="off"></div>
+    <button class="btn btn-ink" id="saveE">${e?'Save changes':'Add expense'}</button>
+    ${e?'<button class="btn-danger-ghost" id="delE" style="width:100%">Delete expense</button>':''}
+  `);
+  let cat=e?e.category:'';
+  document.querySelectorAll('#ecChips .chip').forEach(ch=>ch.onclick=()=>{
+    cat=ch.dataset.c;
+    document.querySelectorAll('#ecChips .chip').forEach(x=>x.classList.toggle('on',x===ch));
+  });
+  document.getElementById('saveE').onclick=()=>{
+    const amount=parseFloat(document.getElementById('e-amt').value);
+    if(!cat){toast('Pick a category');return;}
+    if(isNaN(amount)||amount<=0){toast('Enter the amount');return;}
+    const date=document.getElementById('e-date').value||todayStr();
+    const note=document.getElementById('e-note').value.trim();
+    if(e){Object.assign(e,{category:cat,amount,date,note});}
+    else db.expenses.push({id:uid(),category:cat,amount,date,note});
+    save();closeSheet();render();toast(e?'Saved':'Expense added');
+  };
+  if(e)document.getElementById('delE').onclick=()=>{
+    if(!confirm('Delete this expense?'))return;
+    db.expenses=db.expenses.filter(x=>x.id!==id);save();closeSheet();render();toast('Deleted');
+  };
+}
+
+/* =========================================================
+   SAMPLE DATA (for first-time exploration)
+   ========================================================= */
+function loadSample(){
+  const rel=n=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d);};
+  const d0=rel(0);
+  const c1={id:uid(),name:'Maria Gonzalez',phone:'210-555-0101',notes:'Color formula: 6N + 20vol. Sensitive scalp.'};
+  const c2={id:uid(),name:'Ashley Kim',phone:'210-555-0102',notes:'Prefers long layers.'};
+  const c3={id:uid(),name:'Sofia Ramirez',phone:'',notes:''};
+  db.clients.push(c1,c2,c3);
+  db.appts.push(
+    {id:uid(),clientId:c1.id,service:'Color',date:d0,time:'09:30',price:120,status:'done',payment:{amount:120,tip:24,method:'Card'}},
+    {id:uid(),clientId:c2.id,service:'Haircut',date:d0,time:'11:00',price:45,status:'done',payment:{amount:45,tip:10,method:'Cash'}},
+    {id:uid(),clientId:c3.id,service:'Blowout',date:d0,time:'15:00',price:40,status:'booked',payment:null},
+    {id:uid(),clientId:c2.id,service:'Treatment',date:rel(1),time:'10:00',price:60,status:'booked',payment:null},
+    {id:uid(),clientId:c1.id,service:'Haircut',date:rel(-7),time:'13:00',price:45,status:'done',payment:{amount:45,tip:9,method:'Venmo'}}
+  );
+  db.expenses.push(
+    {id:uid(),category:'Supplies',amount:86.5,date:rel(-2),note:'Color tubes & foils'},
+    {id:uid(),category:'Utilities',amount:65,date:rel(-5),note:'Water bill'},
+    {id:uid(),category:'Products',amount:120,date:d0,note:'Retail shampoo stock'}
+  );
+  save();render();toast('Example data loaded');
 }
 
 /* =========================================================
@@ -753,6 +856,7 @@ function backupSheet(){
     <div class="note" style="margin-bottom:14px">Everything is stored only on this phone. Save a backup file once in a while so nothing is ever lost.</div>
     <button class="btn btn-ink" id="expB">Download backup file</button>
     <button class="btn btn-ghost" id="impB">Restore from backup</button>
+    <button class="btn-danger-ghost" id="wipeB" style="width:100%">Erase all data (start fresh)</button>
     <input type="file" id="impF" accept="application/json" style="display:none">
   `);
   document.getElementById('expB').onclick=()=>{
@@ -764,6 +868,10 @@ function backupSheet(){
   };
   const f=document.getElementById('impF');
   document.getElementById('impB').onclick=()=>f.click();
+  document.getElementById('wipeB').onclick=()=>{
+    if(!confirm('Erase ALL data on this phone? This cannot be undone. (Download a backup first if unsure.)'))return;
+    db={appts:[],clients:[],expenses:[]};save();closeSheet();render();toast('All data erased');
+  };
   f.onchange=()=>{
     const file=f.files[0];if(!file)return;
     const rd=new FileReader();
@@ -771,6 +879,7 @@ function backupSheet(){
       try{
         const d=JSON.parse(rd.result);
         if(!d.appts||!d.clients)throw 0;
+        if(!d.expenses)d.expenses=[];
         if(!confirm('Replace current data with this backup?'))return;
         db=d;save();closeSheet();render();toast('Backup restored');
       }catch(e){toast('That file is not a valid backup');}
