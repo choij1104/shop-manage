@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#33222C">
+<title>Hyona Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#33222C; --ink-soft:#5C4450;
+  --rose:#B25B6C; --rose-deep:#93465A; --rose-tint:#F3E2E4;
+  --blush:#FBF4F3; --paper:#FFFFFF;
+  --sage:#5E7D62; --sage-tint:#E7EFE8;
+  --line:#E9DCDB; --muted:#9A8790;
+  --danger:#B04141;
+  --r-lg:20px; --r-md:12px; --r-sm:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:'Karla',system-ui,sans-serif; background:var(--blush); color:var(--ink);
+  font-size:16px; line-height:1.45; overscroll-behavior:none;
+}
+button{font-family:inherit;border:none;background:none;cursor:pointer;color:inherit}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)}
+h1,h2,h3,.serif{font-family:'Fraunces',serif}
+
+#app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+main{flex:1;padding:20px 18px 96px}
+
+/* ---------- Header ---------- */
+.head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px}
+.head h1{font-size:26px;font-weight:600;letter-spacing:-.01em}
+.head .date{font-size:14px;color:var(--muted)}
+
+/* ---------- Today ledger strip (the one bold element) ---------- */
+.ledger{
+  background:var(--ink); color:#F6EBEA; border-radius:var(--r-lg);
+  padding:22px 20px 18px; margin-bottom:22px; position:relative; overflow:hidden;
+}
+.ledger .lbl{font-size:13px;color:#C9A8AF;margin-bottom:2px}
+.ledger .big{font-family:'Fraunces',serif;font-size:44px;font-weight:600;line-height:1.05;letter-spacing:-.02em}
+.ledger .split{display:flex;gap:26px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(246,235,234,.18)}
+.ledger .split div span{display:block}
+.ledger .split .k{font-size:12.5px;color:#C9A8AF}
+.ledger .split .v{font-family:'Fraunces',serif;font-size:19px;font-weight:600}
+
+/* ---------- Section titles ---------- */
+.sec-t{font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin:20px 0 10px}
+
+/* ---------- Appointment rows ---------- */
+.appt{
+  display:flex;align-items:center;gap:14px;background:var(--paper);
+  border:1px solid var(--line);border-radius:var(--r-md);padding:13px 14px;margin-bottom:9px;
+}
+.appt .time{font-family:'Fraunces',serif;font-weight:600;font-size:16px;min-width:64px;color:var(--rose-deep)}
+.appt .info{flex:1;min-width:0}
+.appt .who{font-weight:700;font-size:15.5px}
+.appt .svc{font-size:13.5px;color:var(--ink-soft)}
+.appt .amt{font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:var(--ink-soft);text-align:right}
+.appt.done{background:var(--sage-tint);border-color:#D3E1D5}
+.appt.done .time{color:var(--sage)}
+.appt.done .amt{color:var(--sage)}
+.appt.cancelled{opacity:.45}
+.appt.cancelled .who{text-decoration:line-through}
+.tap{transition:transform .08s ease}
+.tap:active{transform:scale(.985)}
+
+.empty{
+  text-align:center;color:var(--muted);padding:34px 20px;font-size:14.5px;
+  border:1.5px dashed var(--line);border-radius:var(--r-md);background:rgba(255,255,255,.5);
+}
+
+/* ---------- Primary buttons ---------- */
+.btn{
+  display:block;width:100%;text-align:center;padding:14px;border-radius:var(--r-md);
+  font-weight:700;font-size:15.5px;
+}
+.btn-rose{background:var(--rose);color:#fff}
+.btn-ink{background:var(--ink);color:#fff}
+.btn-ghost{background:var(--paper);border:1px solid var(--line);color:var(--ink)}
+.btn-sage{background:var(--sage);color:#fff}
+.btn-danger-ghost{background:none;color:var(--danger);font-weight:600;font-size:14px;padding:10px}
+.btn+.btn{margin-top:9px}
+
+/* ---------- FAB ---------- */
+.fab{
+  position:fixed;right:calc(50% - 260px + 18px);bottom:86px;width:56px;height:56px;border-radius:50%;
+  background:var(--rose);color:#fff;font-size:28px;line-height:1;font-weight:400;
+  box-shadow:0 6px 18px rgba(178,91,108,.4);display:flex;align-items:center;justify-content:center;
+  z-index:30;
+}
+@media(max-width:560px){.fab{right:18px}}
+
+/* ---------- Tab bar ---------- */
+nav{
+  position:fixed;bottom:0;left:0;right:0;z-index:40;
+  background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
+  border-top:1px solid var(--line);
+}
+.nav-in{max-width:520px;margin:0 auto;display:flex}
+nav button{
+  flex:1;padding:10px 0 max(10px,env(safe-area-inset-bottom));display:flex;flex-direction:column;
+  align-items:center;gap:3px;font-size:11.5px;font-weight:600;color:var(--muted);
+}
+nav button.on{color:var(--rose-deep)}
+nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- Calendar ---------- */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-head h2{font-size:20px;font-weight:600}
+.cal-head button{width:38px;height:38px;border-radius:50%;background:var(--paper);border:1px solid var(--line);font-size:17px}
+.cal{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 10px 14px;margin-bottom:16px}
+.cal .dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:6px}
+.cal .grid{display:grid;grid-template-columns:repeat(7,1fr);row-gap:4px}
+.cal .d{
+  aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border-radius:10px;font-size:14px;position:relative;
+}
+.cal .d.dim{color:#CDBEC4}
+.cal .d.today{outline:2px solid var(--rose);outline-offset:-2px;font-weight:700}
+.cal .d.sel{background:var(--ink);color:#fff;font-weight:700}
+.cal .d .dot{width:5px;height:5px;border-radius:50%;background:var(--rose);position:absolute;bottom:6px}
+.cal .d.sel .dot{background:#F3C9CF}
+
+/* ---------- Clients ---------- */
+.client{
+  display:flex;align-items:center;gap:13px;background:var(--paper);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:13px 14px;margin-bottom:9px;
+}
+.client .av{
+  width:42px;height:42px;border-radius:50%;background:var(--rose-tint);color:var(--rose-deep);
+  display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:700;font-size:17px;
+  flex-shrink:0;
+}
+.client .nm{font-weight:700;font-size:15.5px}
+.client .sub{font-size:13px;color:var(--muted)}
+.client .info{flex:1;min-width:0}
+.search{
+  width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-md);
+  background:var(--paper);margin-bottom:14px;
+}
+.search::placeholder{color:var(--muted)}
+.search:focus{outline:2px solid var(--rose);outline-offset:-1px}
+
+/* ---------- Earnings ---------- */
+.seg{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:4px;margin-bottom:18px}
+.seg button{flex:1;padding:9px 0;border-radius:999px;font-weight:700;font-size:14px;color:var(--muted)}
+.seg button.on{background:var(--ink);color:#fff}
+.earn-strip{
+  background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:20px;margin-bottom:16px;
+}
+.earn-strip .big{font-family:'Fraunces',serif;font-size:38px;font-weight:600;letter-spacing:-.02em}
+.earn-strip .lbl{font-size:13px;color:var(--muted)}
+.earn-strip .row3{display:flex;gap:0;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.earn-strip .row3>div{flex:1}
+.earn-strip .row3 .k{font-size:12.5px;color:var(--muted)}
+.earn-strip .row3 .v{font-family:'Fraunces',serif;font-size:18px;font-weight:600}
+.earn-strip .row3 .v.tip{color:var(--sage)}
+.chart{display:flex;align-items:flex-end;gap:6px;height:110px;margin:6px 2px 4px}
+.chart .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end}
+.chart .bar{width:100%;max-width:34px;border-radius:6px 6px 3px 3px;background:var(--rose-tint);position:relative;overflow:hidden;min-height:3px}
+.chart .bar .tipfill{position:absolute;left:0;right:0;bottom:0;background:var(--sage);opacity:.85}
+.chart .bar .svcfill{position:absolute;left:0;right:0;bottom:0;background:var(--rose)}
+.chart .cl{font-size:10.5px;color:var(--muted);font-weight:600}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--ink-soft);margin-bottom:16px;padding-left:2px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.pay-row{
+  display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px;
+}
+.pay-row .d{font-size:12.5px;color:var(--muted);min-width:52px}
+.pay-row .info{flex:1}
+.pay-row .who{font-weight:700;font-size:14.5px}
+.pay-row .svc{font-size:12.5px;color:var(--ink-soft)}
+.pay-row .amts{text-align:right}
+.pay-row .a{font-family:'Fraunces',serif;font-weight:600;font-size:15px}
+.pay-row .t{font-size:12px;color:var(--sage);font-weight:700}
+
+/* ---------- Modal sheet ---------- */
+.veil{position:fixed;inset:0;background:rgba(51,34,44,.45);z-index:50;display:none}
+.veil.open{display:block}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:60;max-width:520px;margin:0 auto;
+  background:var(--blush);border-radius:22px 22px 0 0;padding:10px 20px calc(20px + env(safe-area-inset-bottom));
+  max-height:88vh;overflow-y:auto;transform:translateY(105%);transition:transform .22s ease;
+}
+.sheet.open{transform:translateY(0)}
+.sheet .grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 14px}
+.sheet h2{font-size:21px;font-weight:600;margin-bottom:16px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:13px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}
+.fld input,.fld select,.fld textarea{
+  width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--paper);
+}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:2px solid var(--rose);outline-offset:-1px}
+.fld-row{display:flex;gap:10px}
+.fld-row .fld{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  padding:8px 14px;border-radius:999px;background:var(--paper);border:1px solid var(--line);
+  font-size:13.5px;font-weight:600;
+}
+.chip.on{background:var(--rose);border-color:var(--rose);color:#fff}
+.tipbtns{display:flex;gap:8px}
+.tipbtns button{
+  flex:1;padding:11px 0;border-radius:var(--r-md);background:var(--paper);border:1px solid var(--line);
+  font-weight:700;font-size:14px;
+}
+.tipbtns button.on{background:var(--sage);border-color:var(--sage);color:#fff}
+.note{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+/* Client detail history */
+.hist{border-left:2px solid var(--rose-tint);margin:6px 0 16px 6px;padding-left:14px}
+.hist .h-row{margin-bottom:10px}
+.hist .h-d{font-size:12px;color:var(--muted);font-weight:700}
+.hist .h-s{font-size:14px}
+
+.toast{
+  position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;font-weight:600;
+  opacity:0;transition:all .25s ease;z-index:80;pointer-events:none;white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.settings-link{display:block;text-align:center;color:var(--muted);font-size:13px;font-weight:600;padding:14px;margin-top:8px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="main"></main>
+  <button class="fab" id="fab" aria-label="New appointment">+</button>
+  <nav>
+    <div class="nav-in">
+      <button data-v="today" class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Today</button>
+      <button data-v="cal"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</button>
+      <button data-v="clients"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Clients</button>
+      <button data-v="earn"><svg viewBox="0 0 24 24"><path d="M4 19V9m6 10V5m6 14v-7"/><path d="M2 21h20"/></svg>Earnings</button>
+    </div>
+  </nav>
+</div>
+<div class="veil" id="veil"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   Hyona Studio — solo stylist booking & earnings
+   Single-file, offline-first, localStorage
+   ========================================================= */
+const LS_KEY='hyona_studio_v1';
+const SERVICES=['Haircut','Color','Perm','Highlights','Blowout','Treatment','Style','Other'];
+
+let db=load();
+function load(){
+  try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients)return d;}catch(e){}
+  return {appts:[],clients:[]};
+}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify(db));}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ---------- date helpers ---------- */
+const fmt$=n=>'$'+(Math.round(n*100)/100).toLocaleString('en-US',{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2});
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function parseYmd(s){const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c);}
+const todayStr=()=>ymd(new Date());
+function niceDate(s,short){
+  const d=parseYmd(s);
+  const o=short?{month:'short',day:'numeric'}:{weekday:'long',month:'long',day:'numeric'};
+  return d.toLocaleDateString('en-US',o);
+}
+function nice12(t){
+  let[h,m]=t.split(':').map(Number);const ap=h>=12?'PM':'AM';h=h%12||12;
+  return h+':'+String(m).padStart(2,'0')+' '+ap;
+}
+function clientName(id){const c=db.clients.find(c=>c.id===id);return c?c.name:'Walk-in';}
+function initials(n){return n.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();}
+
+/* ---------- state ---------- */
+let view='today';
+let calCursor=new Date(); calCursor.setDate(1);
+let calSel=todayStr();
+let earnMode='day';
+let clientQ='';
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+/* ---------- sheet ---------- */
+const veil=document.getElementById('veil'),sheet=document.getElementById('sheet');
+function openSheet(html){sheet.innerHTML='<div class="grip"></div>'+html;veil.classList.add('open');requestAnimationFrame(()=>sheet.classList.add('open'));}
+function closeSheet(){sheet.classList.remove('open');veil.classList.remove('open');setTimeout(()=>{if(!sheet.classList.contains('open'))sheet.innerHTML='';},250);}
+veil.onclick=closeSheet;
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+const main=document.getElementById('main');
+function render(){
+  if(view==='today')renderToday();
+  else if(view==='cal')renderCal();
+  else if(view==='clients')renderClients();
+  else renderEarn();
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  document.getElementById('fab').style.display=(view==='earn')?'none':'flex';
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;render();});
+document.getElementById('fab').onclick=()=>{
+  if(view==='clients')clientForm();
+  else apptForm(null,view==='cal'?calSel:todayStr());
+};
+
+/* ---------- shared: appointment row ---------- */
+function apptRow(a){
+  const paid=a.status==='done'&&a.payment;
+  const amt=paid?fmt$(a.payment.amount+a.payment.tip):(a.price?fmt$(a.price):'');
+  return `<div class="appt tap ${a.status}" data-id="${a.id}" role="button" tabindex="0">
+    <div class="time">${nice12(a.time)}</div>
+    <div class="info">
+      <div class="who">${esc(clientName(a.clientId)||a.walkName||'Walk-in')}</div>
+      <div class="svc">${esc(a.service)}${paid&&a.payment.tip?` · tip ${fmt$(a.payment.tip)}`:''}</div>
+    </div>
+    <div class="amt">${amt}</div>
+  </div>`;
+}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function bindApptRows(root){
+  root.querySelectorAll('.appt').forEach(el=>{
+    el.onclick=()=>apptDetail(el.dataset.id);
+    el.onkeydown=e=>{if(e.key==='Enter')apptDetail(el.dataset.id);};
+  });
+}
+
+/* =========================================================
+   TODAY
+   ========================================================= */
+function dayPayments(dateStr){
+  return db.appts.filter(a=>a.date===dateStr&&a.status==='done'&&a.payment);
+}
+function renderToday(){
+  const t=todayStr();
+  const appts=db.appts.filter(a=>a.date===t).sort((a,b)=>a.time.localeCompare(b.time));
+  const pays=dayPayments(t);
+  const svc=pays.reduce((s,a)=>s+a.payment.amount,0);
+  const tip=pays.reduce((s,a)=>s+a.payment.tip,0);
+  const upcoming=appts.filter(a=>a.status==='booked');
+  const doneList=appts.filter(a=>a.status!=='booked');
+
+  main.innerHTML=`
+    <div class="head"><h1>Today</h1><div class="date">${niceDate(t)}</div></div>
+    <div class="ledger">
+      <div class="lbl">Today's take</div>
+      <div class="big">${fmt$(svc+tip)}</div>
+      <div class="split">
+        <div><span class="k">Services</span><span class="v">${fmt$(svc)}</span></div>
+        <div><span class="k">Tips</span><span class="v">${fmt$(tip)}</span></div>
+        <div><span class="k">Clients seen</span><span class="v">${pays.length}</span></div>
+      </div>
+    </div>
+    <div class="sec-t">Up next</div>
+    ${upcoming.length?upcoming.map(apptRow).join(''):`<div class="empty">No appointments scheduled.<br>Tap + to book one.</div>`}
+    ${doneList.length?`<div class="sec-t">Finished</div>${doneList.map(apptRow).join('')}`:''}
+    <button class="settings-link" id="backupBtn">Back up / restore data</button>
+  `;
+  bindApptRows(main);
+  document.getElementById('backupBtn').onclick=backupSheet;
+}
+
+/* =========================================================
+   CALENDAR
+   ========================================================= */
+function renderCal(){
+  const y=calCursor.getFullYear(),m=calCursor.getMonth();
+  const first=new Date(y,m,1),startDow=first.getDay(),days=new Date(y,m+1,0).getDate();
+  const prevDays=new Date(y,m,0).getDate();
+  const cells=[];
+  for(let i=startDow-1;i>=0;i--)cells.push({d:prevDays-i,dim:true,key:null});
+  for(let d=1;d<=days;d++){
+    const key=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    cells.push({d,dim:false,key});
+  }
+  while(cells.length%7)cells.push({d:cells.length%7,dim:true,key:null});
+  const hasAppt=k=>db.appts.some(a=>a.date===k&&a.status!=='cancelled');
+  const t=todayStr();
+  const monthName=first.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const dayAppts=db.appts.filter(a=>a.date===calSel).sort((a,b)=>a.time.localeCompare(b.time));
+
+  main.innerHTML=`
+    <div class="head"><h1>Calendar</h1></div>
+    <div class="cal-head">
+      <button id="pm" aria-label="Previous month">‹</button>
+      <h2 class="serif">${monthName}</h2>
+      <button id="nm" aria-label="Next month">›</button>
+    </div>
+    <div class="cal">
+      <div class="dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+      <div class="grid">${cells.map(c=>`
+        <div class="d ${c.dim?'dim':''} ${c.key===t?'today':''} ${c.key===calSel?'sel':''}" ${c.key?`data-k="${c.key}"`:''}>
+          ${c.d}${c.key&&hasAppt(c.key)?'<span class="dot"></span>':''}
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="sec-t">${niceDate(calSel)}</div>
+    ${dayAppts.length?dayAppts.map(apptRow).join(''):`<div class="empty">Nothing booked this day.<br>Tap + to add an appointment.</div>`}
+  `;
+  document.getElementById('pm').onclick=()=>{calCursor.setMonth(m-1);render();};
+  document.getElementById('nm').onclick=()=>{calCursor.setMonth(m+1);render();};
+  main.querySelectorAll('.d[data-k]').forEach(el=>el.onclick=()=>{calSel=el.dataset.k;render();});
+  bindApptRows(main);
+}
+
+/* =========================================================
+   CLIENTS
+   ========================================================= */
+function renderClients(){
+  const q=clientQ.toLowerCase();
+  const list=db.clients
+    .filter(c=>!q||c.name.toLowerCase().includes(q)||(c.phone||'').includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  main.innerHTML=`
+    <div class="head"><h1>Clients</h1><div class="date">${db.clients.length} total</div></div>
+    <input class="search" id="cq" placeholder="Search name or phone" value="${esc(clientQ)}">
+    ${list.length?list.map(c=>{
+      const visits=db.appts.filter(a=>a.clientId===c.id&&a.status==='done').length;
+      return `<div class="client tap" data-id="${c.id}" role="button" tabindex="0">
+        <div class="av">${initials(c.name)}</div>
+        <div class="info"><div class="nm">${esc(c.name)}</div>
+        <div class="sub">${visits?visits+' visit'+(visits>1?'s':''):'New'}${c.phone?' · '+esc(c.phone):''}</div></div>
+      </div>`;
+    }).join(''):`<div class="empty">No clients yet.<br>Tap + to add your first client.</div>`}
+  `;
+  const cq=document.getElementById('cq');
+  cq.oninput=()=>{clientQ=cq.value;renderClients();document.getElementById('cq').focus();
+    const el=document.getElementById('cq');el.setSelectionRange(el.value.length,el.value.length);};
+  main.querySelectorAll('.client').forEach(el=>{
+    el.onclick=()=>clientDetail(el.dataset.id);
+    el.onkeydown=e=>{if(e.key==='Enter')clientDetail(el.dataset.id);};
+  });
+}
+
+function clientDetail(id){
+  const c=db.clients.find(x=>x.id===id);if(!c)return;
+  const hist=db.appts.filter(a=>a.clientId===id&&a.status==='done')
+    .sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12);
+  const spent=db.appts.filter(a=>a.clientId===id&&a.status==='done'&&a.payment)
+    .reduce((s,a)=>s+a.payment.amount+a.payment.tip,0);
+  openSheet(`
+    <h2 class="serif">${esc(c.name)}</h2>
+    <div class="fld"><label>Phone</label><div>${c.phone?`<a href="tel:${esc(c.phone)}" style="color:var(--rose-deep);font-weight:700;text-decoration:none">${esc(c.phone)}</a>`:'<span style="color:var(--muted)">—</span>'}</div></div>
+    ${c.notes?`<div class="fld"><label>Notes</label><div style="white-space:pre-wrap">${esc(c.notes)}</div></div>`:''}
+    <div class="fld"><label>Total spent with you</label><div class="serif" style="font-size:22px;font-weight:600">${fmt$(spent)}</div></div>
+    <div class="fld"><label>Recent visits</label>
+      ${hist.length?`<div class="hist">${hist.map(a=>`
+        <div class="h-row"><div class="h-d">${niceDate(a.date,true)}</div>
+        <div class="h-s">${esc(a.service)} · ${a.payment?fmt$(a.payment.amount+a.payment.tip):''}</div></div>`).join('')}</div>`
+      :'<div class="note">No completed visits yet.</div>'}
+    </div>
+    <button class="btn btn-rose" id="bookC">Book appointment</button>
+    <button class="btn btn-ghost" id="editC">Edit client</button>
+    <button class="btn-danger-ghost" id="delC" style="width:100%">Delete client</button>
+  `);
+  document.getElementById('bookC').onclick=()=>{apptForm(null,todayStr(),id);};
+  document.getElementById('editC').onclick=()=>clientForm(id);
+  document.getElementById('delC').onclick=()=>{
+    if(!confirm('Delete '+c.name+'? Their past appointments stay in your records.'))return;
+    db.clients=db.clients.filter(x=>x.id!==id);save();closeSheet();render();toast('Client deleted');
+  };
+}
+
+function clientForm(id){
+  const c=id?db.clients.find(x=>x.id===id):null;
+  openSheet(`
+    <h2 class="serif">${c?'Edit client':'New client'}</h2>
+    <div class="fld"><label>Name</label><input id="f-name" value="${c?esc(c.name):''}" autocomplete="off"></div>
+    <div class="fld"><label>Phone (optional)</label><input id="f-phone" inputmode="tel" value="${c?esc(c.phone||''):''}"></div>
+    <div class="fld"><label>Notes (color formula, preferences…)</label><textarea id="f-notes" rows="3">${c?esc(c.notes||''):''}</textarea></div>
+    <button class="btn btn-rose" id="saveC">${c?'Save changes':'Add client'}</button>
+  `);
+  const nameEl=document.getElementById('f-name');
+  if(!c)setTimeout(()=>nameEl.focus(),260);
+  document.getElementById('saveC').onclick=()=>{
+    const name=nameEl.value.trim();
+    if(!name){toast('Name is required');nameEl.focus();return;}
+    if(c){c.name=name;c.phone=document.getElementById('f-phone').value.trim();c.notes=document.getElementById('f-notes').value.trim();}
+    else db.clients.push({id:uid(),name,phone:document.getElementById('f-phone').value.trim(),notes:document.getElementById('f-notes').value.trim()});
+    save();closeSheet();render();toast(c?'Saved':'Client added');
+  };
+}
+
+/* =========================================================
+   APPOINTMENT: form / detail / checkout
+   ========================================================= */
+function apptForm(id,defaultDate,defaultClient){
+  const a=id?db.appts.find(x=>x.id===id):null;
+  const date=a?a.date:(defaultDate||todayStr());
+  const cid=a?a.clientId:(defaultClient||'');
+  const opts=db.clients.slice().sort((x,y)=>x.name.localeCompare(y.name))
+    .map(c=>`<option value="${c.id}" ${c.id===cid?'selected':''}>${esc(c.name)}</option>`).join('');
+  openSheet(`
+    <h2 class="serif">${a?'Edit appointment':'New appointment'}</h2>
+    <div class="fld"><label>Client</label>
+      <select id="f-client">
+        <option value="">Walk-in / no name</option>${opts}
+        <option value="__new">+ Add new client…</option>
+      </select>
+    </div>
+    <div id="newC" style="display:none"><div class="fld"><label>New client name</label><input id="f-newname" autocomplete="off"></div></div>
+    <div class="fld"><label>Service</label>
+      <div class="chips" id="svcChips">
+        ${SERVICES.map(s=>`<button type="button" class="chip ${a&&a.service===s?'on':''}" data-s="${s}">${s}</button>`).join('')}
+      </div>
+    </div>
+    <div class="fld-row">
+      <div class="fld"><label>Date</label><input id="f-date" type="date" value="${date}"></div>
+      <div class="fld"><label>Time</label><input id="f-time" type="time" value="${a?a.time:'10:00'}"></div>
+    </div>
+    <div class="fld"><label>Price (planned, $)</label><input id="f-price" type="number" inputmode="decimal" min="0" step="1" value="${a&&a.price?a.price:''}" placeholder="e.g. 65"></div>
+    <button class="btn btn-rose" id="saveA">${a?'Save changes':'Book it'}</button>
+  `);
+  let svc=a?a.service:'';
+  const chipBox=document.getElementById('svcChips');
+  chipBox.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
+    svc=ch.dataset.s;
+    chipBox.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===ch));
+  });
+  const sel=document.getElementById('f-client');
+  sel.onchange=()=>{document.getElementById('newC').style.display=sel.value==='__new'?'block':'none';};
+  document.getElementById('saveA').onclick=()=>{
+    if(!svc){toast('Pick a service');return;}
+    let clientId=sel.value;
+    if(clientId==='__new'){
+      const nn=document.getElementById('f-newname').value.trim();
+      if(!nn){toast('Enter the new client name');return;}
+      const nc={id:uid(),name:nn,phone:'',notes:''};db.clients.push(nc);clientId=nc.id;
+    }
+    const d=document.getElementById('f-date').value,t=document.getElementById('f-time').value;
+    if(!d||!t){toast('Date and time are required');return;}
+    const price=parseFloat(document.getElementById('f-price').value)||0;
+    if(a){Object.assign(a,{clientId,service:svc,date:d,time:t,price});}
+    else db.appts.push({id:uid(),clientId,service:svc,date:d,time:t,price,status:'booked',payment:null});
+    save();closeSheet();
+    if(view==='cal')calSel=d;
+    render();toast(a?'Saved':'Booked');
+  };
+}
+
+function apptDetail(id){
+  const a=db.appts.find(x=>x.id===id);if(!a)return;
+  const nm=clientName(a.clientId);
+  if(a.status==='booked'){
+    openSheet(`
+      <h2 class="serif">${esc(nm)}</h2>
+      <div class="fld"><label>Appointment</label>
+        <div>${esc(a.service)} · ${niceDate(a.date,true)} at ${nice12(a.time)}${a.price?` · planned ${fmt$(a.price)}`:''}</div>
+      </div>
+      <button class="btn btn-sage" id="chk">Finish & take payment</button>
+      <button class="btn btn-ghost" id="edA">Edit</button>
+      <button class="btn-danger-ghost" id="cxA" style="width:100%">Cancel appointment</button>
+    `);
+    document.getElementById('chk').onclick=()=>checkout(id);
+    document.getElementById('edA').onclick=()=>apptForm(id);
+    document.getElementById('cxA').onclick=()=>{
+      a.status='cancelled';save();closeSheet();render();toast('Cancelled');
+    };
+  }else if(a.status==='done'){
+    const p=a.payment||{amount:0,tip:0,method:''};
+    openSheet(`
+      <h2 class="serif">${esc(nm)}</h2>
+      <div class="fld"><label>Completed</label>
+        <div>${esc(a.service)} · ${niceDate(a.date,true)} at ${nice12(a.time)}</div></div>
+      <div class="fld"><label>Payment</label>
+        <div class="serif" style="font-size:22px;font-weight:600">${fmt$(p.amount+p.tip)}</div>
+        <div class="note">Service ${fmt$(p.amount)} + tip ${fmt$(p.tip)}${p.method?' · '+p.method:''}</div></div>
+      <button class="btn btn-ghost" id="reP">Edit payment</button>
+      <button class="btn-danger-ghost" id="delA" style="width:100%">Delete record</button>
+    `);
+    document.getElementById('reP').onclick=()=>checkout(id);
+    document.getElementById('delA').onclick=()=>{
+      if(!confirm('Delete this record? It will be removed from earnings.'))return;
+      db.appts=db.appts.filter(x=>x.id!==id);save();closeSheet();render();toast('Deleted');
+    };
+  }else{ /* cancelled */
+    openSheet(`
+      <h2 class="serif">${esc(nm)}</h2>
+      <div class="fld"><label>Cancelled</label><div>${esc(a.service)} · ${niceDate(a.date,true)} at ${nice12(a.time)}</div></div>
+      <button class="btn btn-ghost" id="reB">Restore to booked</button>
+      <button class="btn-danger-ghost" id="delA" style="width:100%">Delete</button>
+    `);
+    document.getElementById('reB').onclick=()=>{a.status='booked';save();closeSheet();render();toast('Restored');};
+    document.getElementById('delA').onclick=()=>{db.appts=db.appts.filter(x=>x.id!==id);save();closeSheet();render();toast('Deleted');};
+  }
+}
+
+/* ---------- checkout with tips ---------- */
+function checkout(id){
+  const a=db.appts.find(x=>x.id===id);if(!a)return;
+  const p=a.payment||{};
+  const baseAmt=p.amount??a.price??'';
+  openSheet(`
+    <h2 class="serif">Take payment</h2>
+    <div class="note" style="margin:-8px 0 14px">${esc(clientName(a.clientId))} · ${esc(a.service)}</div>
+    <div class="fld"><label>Service amount ($)</label>
+      <input id="p-amt" type="number" inputmode="decimal" min="0" step="0.01" value="${baseAmt}"></div>
+    <div class="fld"><label>Tip</label>
+      <div class="tipbtns" id="tipB">
+        <button type="button" data-p="0.15">15%</button>
+        <button type="button" data-p="0.18">18%</button>
+        <button type="button" data-p="0.20">20%</button>
+        <button type="button" data-p="0.25">25%</button>
+      </div>
+      <input id="p-tip" type="number" inputmode="decimal" min="0" step="0.01" value="${p.tip??''}" placeholder="Custom tip $" style="margin-top:8px">
+    </div>
+    <div class="fld"><label>Paid by</label>
+      <div class="chips" id="mB">
+        ${['Cash','Card','Venmo','Zelle','Other'].map(m=>`<button type="button" class="chip ${p.method===m?'on':''}" data-m="${m}">${m}</button>`).join('')}
+      </div>
+    </div>
+    <div class="fld"><label>Total</label><div class="serif" id="p-total" style="font-size:30px;font-weight:600">$0</div></div>
+    <button class="btn btn-sage" id="doneP">Done — record payment</button>
+  `);
+  const amtEl=document.getElementById('p-amt'),tipEl=document.getElementById('p-tip'),totEl=document.getElementById('p-total');
+  let method=p.method||'';
+  function recalc(){
+    const t=(parseFloat(amtEl.value)||0)+(parseFloat(tipEl.value)||0);
+    totEl.textContent=fmt$(t);
+  }
+  amtEl.oninput=recalc;tipEl.oninput=()=>{clearTipSel();recalc();};
+  function clearTipSel(){document.querySelectorAll('#tipB button').forEach(b=>b.classList.remove('on'));}
+  document.querySelectorAll('#tipB button').forEach(b=>b.onclick=()=>{
+    const amt=parseFloat(amtEl.value)||0;
+    tipEl.value=(Math.round(amt*parseFloat(b.dataset.p)*100)/100).toString();
+    clearTipSel();b.classList.add('on');recalc();
+  });
+  document.querySelectorAll('#mB .chip').forEach(c=>c.onclick=()=>{
+    method=c.dataset.m;
+    document.querySelectorAll('#mB .chip').forEach(x=>x.classList.toggle('on',x===c));
+  });
+  recalc();
+  document.getElementById('doneP').onclick=()=>{
+    const amount=parseFloat(amtEl.value);
+    if(isNaN(amount)||amount<0){toast('Enter the service amount');amtEl.focus();return;}
+    a.status='done';
+    a.payment={amount,tip:parseFloat(tipEl.value)||0,method};
+    save();closeSheet();render();toast('Payment recorded');
+  };
+}
+
+/* =========================================================
+   EARNINGS
+   ========================================================= */
+function rangeFor(mode){
+  const now=new Date();
+  if(mode==='day'){const s=todayStr();return{from:s,to:s,label:'Today'};}
+  if(mode==='week'){
+    const d=new Date(now);d.setDate(d.getDate()-d.getDay()); // Sunday start
+    const e=new Date(d);e.setDate(e.getDate()+6);
+    return{from:ymd(d),to:ymd(e),label:'This week'};
+  }
+  const s=new Date(now.getFullYear(),now.getMonth(),1);
+  const e=new Date(now.getFullYear(),now.getMonth()+1,0);
+  return{from:ymd(s),to:ymd(e),label:now.toLocaleDateString('en-US',{month:'long'})};
+}
+function paysBetween(from,to){
+  return db.appts.filter(a=>a.status==='done'&&a.payment&&a.date>=from&&a.date<=to);
+}
+function renderEarn(){
+  const r=rangeFor(earnMode);
+  const pays=paysBetween(r.from,r.to).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+  const svc=pays.reduce((s,a)=>s+a.payment.amount,0);
+  const tip=pays.reduce((s,a)=>s+a.payment.tip,0);
+
+  /* chart buckets */
+  let buckets=[];
+  if(earnMode==='day'){
+    // hourly is overkill; show last 7 days for context
+    for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const k=ymd(d);
+      buckets.push({label:d.toLocaleDateString('en-US',{weekday:'narrow'}),key:k,from:k,to:k});}
+  }else if(earnMode==='week'){
+    const start=parseYmd(r.from);
+    for(let i=0;i<7;i++){const d=new Date(start);d.setDate(d.getDate()+i);const k=ymd(d);
+      buckets.push({label:d.toLocaleDateString('en-US',{weekday:'narrow'}),key:k,from:k,to:k});}
+  }else{
+    // month: 6 monthly buckets ending this month
+    for(let i=5;i>=0;i--){
+      const s=new Date(new Date().getFullYear(),new Date().getMonth()-i,1);
+      const e=new Date(s.getFullYear(),s.getMonth()+1,0);
+      buckets.push({label:s.toLocaleDateString('en-US',{month:'narrow'}),from:ymd(s),to:ymd(e)});
+    }
+  }
+  const bdata=buckets.map(b=>{
+    const ps=paysBetween(b.from,b.to);
+    return{...b,svc:ps.reduce((s,a)=>s+a.payment.amount,0),tip:ps.reduce((s,a)=>s+a.payment.tip,0)};
+  });
+  const maxV=Math.max(1,...bdata.map(b=>b.svc+b.tip));
+
+  main.innerHTML=`
+    <div class="head"><h1>Earnings</h1></div>
+    <div class="seg">
+      ${['day','week','month'].map(m=>`<button data-m="${m}" class="${earnMode===m?'on':''}">${m[0].toUpperCase()+m.slice(1)}</button>`).join('')}
+    </div>
+    <div class="earn-strip">
+      <div class="lbl">${r.label}</div>
+      <div class="big">${fmt$(svc+tip)}</div>
+      <div class="row3">
+        <div><div class="k">Services</div><div class="v">${fmt$(svc)}</div></div>
+        <div><div class="k">Tips</div><div class="v tip">${fmt$(tip)}</div></div>
+        <div><div class="k">Clients</div><div class="v">${pays.length}</div></div>
+      </div>
+    </div>
+    <div class="chart">
+      ${bdata.map(b=>{
+        const tot=b.svc+b.tip,h=Math.round(tot/maxV*100);
+        const tipH=tot?Math.round(b.tip/tot*h):0;
+        return`<div class="col">
+          <div class="bar" style="height:${Math.max(h,tot?4:3)}%">
+            <div class="svcfill" style="height:100%"></div>
+            <div class="tipfill" style="height:${tot?Math.round(b.tip/tot*100):0}%"></div>
+          </div>
+          <div class="cl">${b.label}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--rose)"></i>Services</span>
+      <span><i style="background:var(--sage)"></i>Tips</span>
+    </div>
+    <div class="sec-t">Payments</div>
+    ${pays.length?pays.map(a=>`
+      <div class="pay-row">
+        <div class="d">${niceDate(a.date,true)}</div>
+        <div class="info"><div class="who">${esc(clientName(a.clientId))}</div><div class="svc">${esc(a.service)}${a.payment.method?' · '+a.payment.method:''}</div></div>
+        <div class="amts"><div class="a">${fmt$(a.payment.amount+a.payment.tip)}</div>${a.payment.tip?`<div class="t">+${fmt$(a.payment.tip)} tip</div>`:''}</div>
+      </div>`).join('')
+    :`<div class="empty">No payments in this period yet.</div>`}
+  `;
+  main.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{earnMode=b.dataset.m;render();});
+}
+
+/* =========================================================
+   BACKUP / RESTORE
+   ========================================================= */
+function backupSheet(){
+  openSheet(`
+    <h2 class="serif">Your data</h2>
+    <div class="note" style="margin-bottom:14px">Everything is stored only on this phone. Save a backup file once in a while so nothing is ever lost.</div>
+    <button class="btn btn-ink" id="expB">Download backup file</button>
+    <button class="btn btn-ghost" id="impB">Restore from backup</button>
+    <input type="file" id="impF" accept="application/json" style="display:none">
+  `);
+  document.getElementById('expB').onclick=()=>{
+    const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='hyona-studio-backup-'+todayStr()+'.json';
+    a.click();URL.revokeObjectURL(a.href);toast('Backup downloaded');
+  };
+  const f=document.getElementById('impF');
+  document.getElementById('impB').onclick=()=>f.click();
+  f.onchange=()=>{
+    const file=f.files[0];if(!file)return;
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const d=JSON.parse(rd.result);
+        if(!d.appts||!d.clients)throw 0;
+        if(!confirm('Replace current data with this backup?'))return;
+        db=d;save();closeSheet();render();toast('Backup restored');
+      }catch(e){toast('That file is not a valid backup');}
+    };
+    rd.readAsText(file);
+  };
+}
+
+render();
+</script>
+</body>
+</html>
