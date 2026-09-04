@@ -269,8 +269,8 @@ const EXPENSE_CATS=['Supplies','Products','Rent','Utilities','Equipment','Other'
 
 let db=load();
 function load(){
-  try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients){if(!d.expenses)d.expenses=[];return d;}}catch(e){}
-  return {appts:[],clients:[],expenses:[]};
+  try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients){if(!d.expenses)d.expenses=[];if(!d.staff)d.staff=[];return d;}}catch(e){}
+  return {appts:[],clients:[],expenses:[],staff:[]};
 }
 function save(){localStorage.setItem(LS_KEY,JSON.stringify(db));}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -290,6 +290,7 @@ function nice12(t){
   return h+':'+String(m).padStart(2,'0')+' '+ap;
 }
 function clientName(id){const c=db.clients.find(c=>c.id===id);return c?c.name:'Walk-in';}
+function staffName(id){if(!id||id==='me')return '';const s=db.staff.find(x=>x.id===id);return s?s.name:'Staff';}
 function initials(n){return n.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();}
 
 /* ---------- state ---------- */
@@ -297,6 +298,7 @@ let view='today';
 let calCursor=new Date(); calCursor.setDate(1);
 let calSel=todayStr();
 let earnMode='day';
+let earnStaff='all';
 let clientQ='';
 
 /* ---------- toast ---------- */
@@ -339,7 +341,7 @@ function apptRow(a){
     <div class="time">${nice12(a.time)}</div>
     <div class="info">
       <div class="who">${esc(clientName(a.clientId)||a.walkName||'Walk-in')}</div>
-      <div class="svc">${esc(a.service)}${paid&&a.payment.tip?` · tip ${fmt$(a.payment.tip)}`:''}</div>
+      <div class="svc">${esc(a.service)}${staffName(a.staffId)?' · '+esc(staffName(a.staffId)):''}${paid&&a.payment.tip?` · tip ${fmt$(a.payment.tip)}`:''}</div>
     </div>
     <div class="amt">${amt}</div>
   </div>`;
@@ -529,6 +531,12 @@ function apptForm(id,defaultDate,defaultClient){
       </select>
     </div>
     <div id="newC" style="display:none"><div class="fld"><label>New client name</label><input id="f-newname" autocomplete="off"></div></div>
+    ${db.staff.length?`<div class="fld"><label>Stylist</label>
+      <div class="chips" id="stChips">
+        <button type="button" class="chip ${(!a||!a.staffId||a.staffId==='me')?'on':''}" data-st="me">Me</button>
+        ${db.staff.map(s=>`<button type="button" class="chip ${a&&a.staffId===s.id?'on':''}" data-st="${s.id}">${esc(s.name)}</button>`).join('')}
+      </div>
+    </div>`:''}
     <div class="fld"><label>Service</label>
       <div class="chips" id="svcChips">
         ${SERVICES.map(s=>`<button type="button" class="chip ${a&&a.service===s?'on':''}" data-s="${s}">${s}</button>`).join('')}
@@ -542,10 +550,16 @@ function apptForm(id,defaultDate,defaultClient){
     <button class="btn btn-rose" id="saveA">${a?'Save changes':'Book it'}</button>
   `);
   let svc=a?a.service:'';
+  let staffId=a?(a.staffId||'me'):'me';
   const chipBox=document.getElementById('svcChips');
   chipBox.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
     svc=ch.dataset.s;
     chipBox.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===ch));
+  });
+  const stBox=document.getElementById('stChips');
+  if(stBox)stBox.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
+    staffId=ch.dataset.st;
+    stBox.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===ch));
   });
   const sel=document.getElementById('f-client');
   sel.onchange=()=>{document.getElementById('newC').style.display=sel.value==='__new'?'block':'none';};
@@ -560,8 +574,8 @@ function apptForm(id,defaultDate,defaultClient){
     const d=document.getElementById('f-date').value,t=document.getElementById('f-time').value;
     if(!d||!t){toast('Date and time are required');return;}
     const price=parseFloat(document.getElementById('f-price').value)||0;
-    if(a){Object.assign(a,{clientId,service:svc,date:d,time:t,price});}
-    else db.appts.push({id:uid(),clientId,service:svc,date:d,time:t,price,status:'booked',payment:null});
+    if(a){Object.assign(a,{clientId,service:svc,date:d,time:t,price,staffId});}
+    else db.appts.push({id:uid(),clientId,service:svc,date:d,time:t,price,staffId,status:'booked',payment:null});
     save();closeSheet();
     if(view==='cal')calSel=d;
     render();toast(a?'Saved':'Booked');
@@ -692,7 +706,8 @@ function expensesBetween(from,to){
 }
 function renderEarn(){
   const r=rangeFor(earnMode);
-  const pays=paysBetween(r.from,r.to).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+  const fp=(from,to)=>paysBetween(from,to).filter(a=>earnStaff==='all'||(a.staffId||'me')===earnStaff);
+  const pays=fp(r.from,r.to).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
   const svc=pays.reduce((s,a)=>s+a.payment.amount,0);
   const tip=pays.reduce((s,a)=>s+a.payment.tip,0);
   const exps=expensesBetween(r.from,r.to).sort((a,b)=>b.date.localeCompare(a.date));
@@ -718,7 +733,7 @@ function renderEarn(){
     }
   }
   const bdata=buckets.map(b=>{
-    const ps=paysBetween(b.from,b.to);
+    const ps=fp(b.from,b.to);
     return{...b,svc:ps.reduce((s,a)=>s+a.payment.amount,0),tip:ps.reduce((s,a)=>s+a.payment.tip,0)};
   });
   const maxV=Math.max(1,...bdata.map(b=>b.svc+b.tip));
@@ -728,19 +743,24 @@ function renderEarn(){
     <div class="seg">
       ${['day','week','month'].map(m=>`<button data-m="${m}" class="${earnMode===m?'on':''}">${m[0].toUpperCase()+m.slice(1)}</button>`).join('')}
     </div>
+    ${db.staff.length?`<div class="chips" id="stFilter" style="margin:-8px 0 16px">
+      <button type="button" class="chip ${earnStaff==='all'?'on':''}" data-st="all">Everyone</button>
+      <button type="button" class="chip ${earnStaff==='me'?'on':''}" data-st="me">Me</button>
+      ${db.staff.map(s=>`<button type="button" class="chip ${earnStaff===s.id?'on':''}" data-st="${s.id}">${esc(s.name)}</button>`).join('')}
+    </div>`:''}
     <div class="earn-strip">
-      <div class="lbl">${r.label}</div>
+      <div class="lbl">${r.label}${earnStaff!=='all'?' · '+(earnStaff==='me'?'Me':esc(staffName(earnStaff))):''}</div>
       <div class="big">${fmt$(svc+tip)}</div>
       <div class="row3">
         <div><div class="k">Services</div><div class="v">${fmt$(svc)}</div></div>
         <div><div class="k">Tips</div><div class="v tip">${fmt$(tip)}</div></div>
         <div><div class="k">Clients</div><div class="v">${pays.length}</div></div>
       </div>
-      <div class="row3">
+      ${earnStaff==='all'?`<div class="row3">
         <div><div class="k">Expenses</div><div class="v exp">${expTotal?'\u2212'+fmt$(expTotal):'$0'}</div></div>
         <div><div class="k">Net</div><div class="v">${fmt$(net)}</div></div>
         <div></div>
-      </div>
+      </div>`:''}
     </div>
     <div class="chart">
       ${bdata.map(b=>{
@@ -763,20 +783,22 @@ function renderEarn(){
     ${pays.length?pays.map(a=>`
       <div class="pay-row">
         <div class="d">${niceDate(a.date,true)}</div>
-        <div class="info"><div class="who">${esc(clientName(a.clientId))}</div><div class="svc">${esc(a.service)}${a.payment.method?' · '+a.payment.method:''}</div></div>
+        <div class="info"><div class="who">${esc(clientName(a.clientId))}</div><div class="svc">${esc(a.service)}${staffName(a.staffId)?' · '+esc(staffName(a.staffId)):''}${a.payment.method?' · '+a.payment.method:''}</div></div>
         <div class="amts"><div class="a">${fmt$(a.payment.amount+a.payment.tip)}</div>${a.payment.tip?`<div class="t">+${fmt$(a.payment.tip)} tip</div>`:''}</div>
       </div>`).join('')
     :`<div class="empty">No payments in this period yet.</div>`}
-    <div class="sec-t">Expenses</div>
+    ${earnStaff==='all'?`<div class="sec-t">Expenses</div>
     ${exps.length?exps.map(e=>`
       <div class="exp-row tap" data-id="${e.id}" role="button" tabindex="0">
         <div class="d">${niceDate(e.date,true)}</div>
         <div class="info"><div class="cat">${esc(e.category)}</div>${e.note?`<div class="nt">${esc(e.note)}</div>`:''}</div>
         <div class="a">\u2212${fmt$(e.amount)}</div>
       </div>`).join('')
-    :`<div class="empty">No expenses recorded.<br>Tap + to add supplies, rent, utilities\u2026</div>`}
+    :`<div class="empty">No expenses recorded.<br>Tap + to add supplies, rent, utilities\u2026</div>`}`:''}
   `;
   main.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{earnMode=b.dataset.m;render();});
+  const stF=document.getElementById('stFilter');
+  if(stF)stF.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{earnStaff=c.dataset.st;render();});
   main.querySelectorAll('.exp-row').forEach(el=>{
     el.onclick=()=>expenseForm(el.dataset.id);
     el.onkeydown=ev=>{if(ev.key==='Enter')expenseForm(el.dataset.id);};
@@ -848,12 +870,44 @@ function loadSample(){
 }
 
 /* =========================================================
+   TEAM (multi-stylist)
+   ========================================================= */
+function teamSheet(){
+  openSheet(`
+    <h2 class="serif">Team</h2>
+    <div class="note" style="margin:-8px 0 14px">Add stylists who work with you. Bookings and earnings can then be tracked per person. Leave empty for solo mode \u2014 the app stays simple.</div>
+    ${db.staff.length?db.staff.map(s=>`
+      <div class="client">
+        <div class="av">${initials(s.name)}</div>
+        <div class="info"><div class="nm">${esc(s.name)}</div></div>
+        <button class="btn-danger-ghost" data-del="${s.id}">Remove</button>
+      </div>`).join('')
+    :'<div class="note" style="margin-bottom:10px">No team members yet \u2014 solo mode.</div>'}
+    <div class="fld" style="margin-top:12px"><label>Add stylist</label><input id="st-name" placeholder="Name" autocomplete="off"></div>
+    <button class="btn btn-rose" id="addSt">Add to team</button>
+  `);
+  document.getElementById('addSt').onclick=()=>{
+    const name=document.getElementById('st-name').value.trim();
+    if(!name){toast('Enter a name');return;}
+    db.staff.push({id:uid(),name});save();toast('Added');teamSheet();
+  };
+  sheet.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    const s=db.staff.find(x=>x.id===b.dataset.del);
+    if(!confirm('Remove '+(s?s.name:'this stylist')+' from the team? Their past bookings stay in your records.'))return;
+    db.staff=db.staff.filter(x=>x.id!==b.dataset.del);
+    if(earnStaff===b.dataset.del)earnStaff='all';
+    save();toast('Removed');teamSheet();
+  });
+}
+
+/* =========================================================
    BACKUP / RESTORE
    ========================================================= */
 function backupSheet(){
   openSheet(`
     <h2 class="serif">Your data</h2>
     <div class="note" style="margin-bottom:14px">Everything is stored only on this phone. Save a backup file once in a while so nothing is ever lost.</div>
+    <button class="btn btn-ghost" id="teamB">Manage team (add stylists)</button>
     <button class="btn btn-ink" id="expB">Download backup file</button>
     <button class="btn btn-ghost" id="impB">Restore from backup</button>
     <button class="btn-danger-ghost" id="wipeB" style="width:100%">Erase all data (start fresh)</button>
@@ -867,10 +921,11 @@ function backupSheet(){
     a.click();URL.revokeObjectURL(a.href);toast('Backup downloaded');
   };
   const f=document.getElementById('impF');
+  document.getElementById('teamB').onclick=teamSheet;
   document.getElementById('impB').onclick=()=>f.click();
   document.getElementById('wipeB').onclick=()=>{
     if(!confirm('Erase ALL data on this phone? This cannot be undone. (Download a backup first if unsure.)'))return;
-    db={appts:[],clients:[],expenses:[]};save();closeSheet();render();toast('All data erased');
+    db={appts:[],clients:[],expenses:[],staff:[]};earnStaff='all';save();closeSheet();render();toast('All data erased');
   };
   f.onchange=()=>{
     const file=f.files[0];if(!file)return;
@@ -880,6 +935,7 @@ function backupSheet(){
         const d=JSON.parse(rd.result);
         if(!d.appts||!d.clients)throw 0;
         if(!d.expenses)d.expenses=[];
+        if(!d.staff)d.staff=[];
         if(!confirm('Replace current data with this backup?'))return;
         db=d;save();closeSheet();render();toast('Backup restored');
       }catch(e){toast('That file is not a valid backup');}
