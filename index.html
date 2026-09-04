@@ -914,6 +914,111 @@ function teamSheet(){
 }
 
 /* =========================================================
+   CSV EXPORT / IMPORT
+   One file holds both appointments and expenses (Type column).
+   ========================================================= */
+const CSV_COLS=['Type','Date','Time','Client','Phone','Service','Stylist','Amount','Tip','Total','Method','Status','Category','Note'];
+function csvCell(v){
+  const s=(v==null?'':String(v));
+  return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function buildCSV(){
+  const rows=[CSV_COLS.join(',')];
+  db.appts.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).forEach(a=>{
+    const c=db.clients.find(x=>x.id===a.clientId);
+    const p=a.payment||{};
+    const amt=a.status==='done'?(p.amount||0):(a.price||0);
+    const tip=a.status==='done'?(p.tip||0):0;
+    rows.push([
+      'Appointment',a.date,a.time,c?c.name:'Walk-in',c?(c.phone||''):'',a.service,
+      (!a.staffId||a.staffId==='me')?meLabel():staffName(a.staffId),
+      amt,tip,(amt+tip),p.method||'',a.status,'',c?(c.notes||''):''
+    ].map(csvCell).join(','));
+  });
+  db.expenses.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
+    rows.push(['Expense',e.date,'','','','','',e.amount,0,e.amount,'','','',e.note||''].map(csvCell).join(','));
+  });
+  return rows.join('\r\n');
+}
+function exportCSV(){
+  const blob=new Blob(['\ufeff'+buildCSV()],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='salon-studio-'+todayStr()+'.csv';
+  a.click();URL.revokeObjectURL(a.href);
+  toast('CSV downloaded');
+}
+function parseCSV(text){
+  if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){
+      if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; }
+      else cur+=ch;
+    }else{
+      if(ch==='"')q=true;
+      else if(ch===','){row.push(cur);cur='';}
+      else if(ch==='\n'){row.push(cur);cur='';rows.push(row);row=[];}
+      else if(ch!=='\r')cur+=ch;
+    }
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(r=>r.some(c=>c.trim()!==''));
+}
+function importCSV(file){
+  const rd=new FileReader();
+  rd.onload=()=>{
+    let rows;
+    try{rows=parseCSV(rd.result);}catch(e){toast('Could not read that file');return;}
+    if(!rows.length){toast('That file is empty');return;}
+    const head=rows[0].map(h=>h.trim().toLowerCase());
+    const col=n=>head.indexOf(n);
+    if(col('type')<0||col('date')<0){toast('Not a Salon Studio CSV');return;}
+    const get=(r,n)=>{const i=col(n);return i<0?'':(r[i]||'').trim();};
+    const num=v=>{const n=parseFloat(String(v).replace(/[$,]/g,''));return isNaN(n)?0:n;};
+    let addedA=0,addedE=0,newC=0;
+    const bodies=rows.slice(1);
+    if(!confirm('Add '+bodies.length+' rows from this file to your current data? Nothing is deleted.'))return;
+    bodies.forEach(r=>{
+      const type=get(r,'type').toLowerCase();
+      const date=get(r,'date');
+      if(!date)return;
+      if(type==='expense'){
+        db.expenses.push({id:uid(),category:get(r,'category')||'Other',amount:num(get(r,'amount')),date,note:get(r,'note')});
+        addedE++;
+      }else if(type==='appointment'){
+        const nm=get(r,'client');
+        let cid='';
+        if(nm&&nm.toLowerCase()!=='walk-in'){
+          let c=db.clients.find(x=>x.name.toLowerCase()===nm.toLowerCase());
+          if(!c){c={id:uid(),name:nm,phone:get(r,'phone'),notes:get(r,'note')};db.clients.push(c);newC++;}
+          cid=c.id;
+        }
+        const stName=get(r,'stylist');
+        let stId='me';
+        if(stName&&stName.toLowerCase()!==meLabel().toLowerCase()){
+          let s=db.staff.find(x=>x.name.toLowerCase()===stName.toLowerCase());
+          if(s)stId=s.id;
+        }
+        const amount=num(get(r,'amount')),tip=num(get(r,'tip'));
+        const status=(get(r,'status')||'done').toLowerCase();
+        db.appts.push({
+          id:uid(),clientId:cid,service:get(r,'service')||'Other',date,
+          time:get(r,'time')||'12:00',price:amount,staffId:stId,
+          status:['booked','done','cancelled'].includes(status)?status:'done',
+          payment:status==='booked'?null:{amount,tip,method:get(r,'method')}
+        });
+        addedA++;
+      }
+    });
+    save();closeSheet();render();
+    toast('Added '+addedA+' bookings, '+addedE+' expenses');
+  };
+  rd.readAsText(file);
+}
+
+/* =========================================================
    BACKUP / RESTORE
    ========================================================= */
 function backupSheet(){
@@ -929,8 +1034,13 @@ function backupSheet(){
     <div class="note" style="margin-bottom:12px">Everything is stored only on this phone. Save a backup file once in a while so nothing is ever lost.</div>
     <button class="btn btn-ink" id="expB">Download backup file</button>
     <button class="btn btn-ghost" id="impB">Restore from backup</button>
+    <div class="sec-t" style="margin-top:18px">Spreadsheet (CSV)</div>
+    <div class="note" style="margin-bottom:12px">Opens in Excel or Numbers \u2014 useful for your accountant, and it can be brought back in later.</div>
+    <button class="btn btn-ghost" id="csvOutB">Export to CSV</button>
+    <button class="btn btn-ghost" id="csvInB">Import from CSV</button>
     <button class="btn-danger-ghost" id="wipeB" style="width:100%">Erase all data (start fresh)</button>
     <input type="file" id="impF" accept="application/json" style="display:none">
+    <input type="file" id="csvF" accept=".csv,text/csv" style="display:none">
   `);
   document.getElementById('saveOwn').onclick=()=>{
     db.owner={name:document.getElementById('ownName').value.trim()};
@@ -944,6 +1054,10 @@ function backupSheet(){
     a.click();URL.revokeObjectURL(a.href);toast('Backup downloaded');
   };
   const f=document.getElementById('impF');
+  document.getElementById('csvOutB').onclick=exportCSV;
+  const cf=document.getElementById('csvF');
+  document.getElementById('csvInB').onclick=()=>cf.click();
+  cf.onchange=()=>{const file=cf.files[0];if(file)importCSV(file);};
   document.getElementById('teamB').onclick=teamSheet;
   document.getElementById('impB').onclick=()=>f.click();
   document.getElementById('wipeB').onclick=()=>{
