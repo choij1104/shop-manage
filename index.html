@@ -275,8 +275,8 @@ function load(){
       localStorage.setItem(LS_KEY,localStorage.getItem(LS_LEGACY));
     }
   }catch(e){}
-  try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients){if(!d.expenses)d.expenses=[];if(!d.staff)d.staff=[];return d;}}catch(e){}
-  return {appts:[],clients:[],expenses:[],staff:[]};
+  try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients){if(!d.expenses)d.expenses=[];if(!d.staff)d.staff=[];if(!d.owner)d.owner={name:''};return d;}}catch(e){}
+  return {appts:[],clients:[],expenses:[],staff:[],owner:{name:''}};
 }
 function save(){localStorage.setItem(LS_KEY,JSON.stringify(db));}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -296,6 +296,7 @@ function nice12(t){
   return h+':'+String(m).padStart(2,'0')+' '+ap;
 }
 function clientName(id){const c=db.clients.find(c=>c.id===id);return c?c.name:'Walk-in';}
+const meLabel=()=>(db.owner&&db.owner.name)?db.owner.name:'Me';
 function staffName(id){if(!id||id==='me')return '';const s=db.staff.find(x=>x.id===id);return s?s.name:'Staff';}
 function initials(n){return n.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();}
 
@@ -340,6 +341,10 @@ document.getElementById('fab').onclick=()=>{
 };
 
 /* ---------- shared: appointment row ---------- */
+function whoDid(a){
+  if(!db.staff.length)return '';
+  return (!a.staffId||a.staffId==='me')?meLabel():staffName(a.staffId);
+}
 function apptRow(a){
   const paid=a.status==='done'&&a.payment;
   const amt=paid?fmt$(a.payment.amount+a.payment.tip):(a.price?fmt$(a.price):'');
@@ -347,7 +352,7 @@ function apptRow(a){
     <div class="time">${nice12(a.time)}</div>
     <div class="info">
       <div class="who">${esc(clientName(a.clientId)||a.walkName||'Walk-in')}</div>
-      <div class="svc">${esc(a.service)}${staffName(a.staffId)?' · '+esc(staffName(a.staffId)):''}${paid&&a.payment.tip?` · tip ${fmt$(a.payment.tip)}`:''}</div>
+      <div class="svc">${esc(a.service)}${whoDid(a)?' · '+esc(whoDid(a)):''}${paid&&a.payment.tip?` · tip ${fmt$(a.payment.tip)}`:''}</div>
     </div>
     <div class="amt">${amt}</div>
   </div>`;
@@ -390,7 +395,7 @@ function renderToday(){
     <div class="sec-t">Up next</div>
     ${upcoming.length?upcoming.map(apptRow).join(''):`<div class="empty">No appointments scheduled.<br>Tap + to book one.${fresh?'<br><br><button class="chip" id="sampleBtn" style="background:var(--rose);border-color:var(--rose);color:#fff">See it with example data</button>':''}</div>`}
     ${doneList.length?`<div class="sec-t">Finished</div>${doneList.map(apptRow).join('')}`:''}
-    <button class="settings-link" id="backupBtn">Back up / restore data</button>
+    <button class="settings-link" id="backupBtn">Settings</button>
   `;
   bindApptRows(main);
   document.getElementById('backupBtn').onclick=backupSheet;
@@ -539,7 +544,7 @@ function apptForm(id,defaultDate,defaultClient){
     <div id="newC" style="display:none"><div class="fld"><label>New client name</label><input id="f-newname" autocomplete="off"></div></div>
     ${db.staff.length?`<div class="fld"><label>Stylist</label>
       <div class="chips" id="stChips">
-        <button type="button" class="chip ${(!a||!a.staffId||a.staffId==='me')?'on':''}" data-st="me">Me</button>
+        <button type="button" class="chip ${(!a||!a.staffId||a.staffId==='me')?'on':''}" data-st="me">${esc(meLabel())}</button>
         ${db.staff.map(s=>`<button type="button" class="chip ${a&&a.staffId===s.id?'on':''}" data-st="${s.id}">${esc(s.name)}</button>`).join('')}
       </div>
     </div>`:''}
@@ -751,11 +756,11 @@ function renderEarn(){
     </div>
     ${db.staff.length?`<div class="chips" id="stFilter" style="margin:-8px 0 16px">
       <button type="button" class="chip ${earnStaff==='all'?'on':''}" data-st="all">Everyone</button>
-      <button type="button" class="chip ${earnStaff==='me'?'on':''}" data-st="me">Me</button>
+      <button type="button" class="chip ${earnStaff==='me'?'on':''}" data-st="me">${esc(meLabel())}</button>
       ${db.staff.map(s=>`<button type="button" class="chip ${earnStaff===s.id?'on':''}" data-st="${s.id}">${esc(s.name)}</button>`).join('')}
     </div>`:''}
     <div class="earn-strip">
-      <div class="lbl">${r.label}${earnStaff!=='all'?' · '+(earnStaff==='me'?'Me':esc(staffName(earnStaff))):''}</div>
+      <div class="lbl">${r.label}${earnStaff!=='all'?' · '+(earnStaff==='me'?esc(meLabel()):esc(staffName(earnStaff))):''}</div>
       <div class="big">${fmt$(svc+tip)}</div>
       <div class="row3">
         <div><div class="k">Services</div><div class="v">${fmt$(svc)}</div></div>
@@ -789,7 +794,7 @@ function renderEarn(){
     ${pays.length?pays.map(a=>`
       <div class="pay-row">
         <div class="d">${niceDate(a.date,true)}</div>
-        <div class="info"><div class="who">${esc(clientName(a.clientId))}</div><div class="svc">${esc(a.service)}${staffName(a.staffId)?' · '+esc(staffName(a.staffId)):''}${a.payment.method?' · '+a.payment.method:''}</div></div>
+        <div class="info"><div class="who">${esc(clientName(a.clientId))}</div><div class="svc">${esc(a.service)}${whoDid(a)?' · '+esc(whoDid(a)):''}${a.payment.method?' · '+a.payment.method:''}</div></div>
         <div class="amts"><div class="a">${fmt$(a.payment.amount+a.payment.tip)}</div>${a.payment.tip?`<div class="t">+${fmt$(a.payment.tip)} tip</div>`:''}</div>
       </div>`).join('')
     :`<div class="empty">No payments in this period yet.</div>`}
@@ -891,7 +896,9 @@ function teamSheet(){
     :'<div class="note" style="margin-bottom:10px">No team members yet \u2014 solo mode.</div>'}
     <div class="fld" style="margin-top:12px"><label>Add stylist</label><input id="st-name" placeholder="Name" autocomplete="off"></div>
     <button class="btn btn-rose" id="addSt">Add to team</button>
+    <button class="btn btn-ghost" id="backSet">Back to Settings</button>
   `);
+  document.getElementById('backSet').onclick=backupSheet;
   document.getElementById('addSt').onclick=()=>{
     const name=document.getElementById('st-name').value.trim();
     if(!name){toast('Enter a name');return;}
@@ -911,14 +918,24 @@ function teamSheet(){
    ========================================================= */
 function backupSheet(){
   openSheet(`
-    <h2 class="serif">Your data</h2>
-    <div class="note" style="margin-bottom:14px">Everything is stored only on this phone. Save a backup file once in a while so nothing is ever lost.</div>
-    <button class="btn btn-ghost" id="teamB">Manage team (add stylists)</button>
+    <h2 class="serif">Settings</h2>
+    <div class="fld"><label>Your name</label>
+      <input id="ownName" value="${esc(db.owner&&db.owner.name?db.owner.name:'')}" placeholder="e.g. Hyona" autocomplete="off">
+      <div class="note">Shown on your own bookings and earnings. Leave blank to just say \u201cMe\u201d.</div>
+    </div>
+    <button class="btn btn-rose" id="saveOwn">Save name</button>
+    <button class="btn btn-ghost" id="teamB">Team \u2014 add stylists (${db.staff.length})</button>
+    <div class="sec-t" style="margin-top:22px">Your data</div>
+    <div class="note" style="margin-bottom:12px">Everything is stored only on this phone. Save a backup file once in a while so nothing is ever lost.</div>
     <button class="btn btn-ink" id="expB">Download backup file</button>
     <button class="btn btn-ghost" id="impB">Restore from backup</button>
     <button class="btn-danger-ghost" id="wipeB" style="width:100%">Erase all data (start fresh)</button>
     <input type="file" id="impF" accept="application/json" style="display:none">
   `);
+  document.getElementById('saveOwn').onclick=()=>{
+    db.owner={name:document.getElementById('ownName').value.trim()};
+    save();render();toast('Saved');
+  };
   document.getElementById('expB').onclick=()=>{
     const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
     const a=document.createElement('a');
@@ -931,7 +948,7 @@ function backupSheet(){
   document.getElementById('impB').onclick=()=>f.click();
   document.getElementById('wipeB').onclick=()=>{
     if(!confirm('Erase ALL data on this phone? This cannot be undone. (Download a backup first if unsure.)'))return;
-    db={appts:[],clients:[],expenses:[],staff:[]};earnStaff='all';save();closeSheet();render();toast('All data erased');
+    db={appts:[],clients:[],expenses:[],staff:[],owner:{name:''}};earnStaff='all';save();closeSheet();render();toast('All data erased');
   };
   f.onchange=()=>{
     const file=f.files[0];if(!file)return;
@@ -942,6 +959,7 @@ function backupSheet(){
         if(!d.appts||!d.clients)throw 0;
         if(!d.expenses)d.expenses=[];
         if(!d.staff)d.staff=[];
+        if(!d.owner)d.owner={name:''};
         if(!confirm('Replace current data with this backup?'))return;
         db=d;save();closeSheet();render();toast('Backup restored');
       }catch(e){toast('That file is not a valid backup');}
