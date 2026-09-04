@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#33222C">
-<title>Hyona Studio</title>
+<title>Salon Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -260,15 +260,21 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;st
 
 <script>
 /* =========================================================
-   Hyona Studio — solo stylist booking & earnings
+   Salon Studio — solo stylist booking & earnings
    Single-file, offline-first, localStorage
    ========================================================= */
-const LS_KEY='hyona_studio_v1';
+const LS_KEY='salon_studio_v1';
+const LS_LEGACY='hyona_studio_v1';
 const SERVICES=['Haircut','Color','Perm','Highlights','Blowout','Treatment','Style','Other'];
 const EXPENSE_CATS=['Supplies','Products','Rent','Utilities','Equipment','Other'];
 
 let db=load();
 function load(){
+  try{
+    if(!localStorage.getItem(LS_KEY)&&localStorage.getItem(LS_LEGACY)){
+      localStorage.setItem(LS_KEY,localStorage.getItem(LS_LEGACY));
+    }
+  }catch(e){}
   try{const d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&d.appts&&d.clients){if(!d.expenses)d.expenses=[];if(!d.staff)d.staff=[];return d;}}catch(e){}
   return {appts:[],clients:[],expenses:[],staff:[]};
 }
@@ -917,7 +923,7 @@ function backupSheet(){
     const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download='hyona-studio-backup-'+todayStr()+'.json';
+    a.download='salon-studio-backup-'+todayStr()+'.json';
     a.click();URL.revokeObjectURL(a.href);toast('Backup downloaded');
   };
   const f=document.getElementById('impF');
