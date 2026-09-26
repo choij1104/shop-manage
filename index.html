@@ -65,8 +65,9 @@ main{flex:1;padding:20px 18px 96px}
 .appt.done .amt{color:var(--sage)}
 .appt.cancelled{opacity:.45}
 .appt.cancelled .who{text-decoration:line-through}
-.tap{transition:transform .08s ease}
+.tap{transition:transform .08s ease;cursor:pointer}
 .tap:active{transform:scale(.985)}
+.appt,.client,.exp-row,.cal .d[data-k]{cursor:pointer}
 
 .empty{
   text-align:center;color:var(--muted);padding:34px 20px;font-size:14.5px;
@@ -111,7 +112,7 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;st
 /* ---------- Calendar ---------- */
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .cal-head h2{font-size:20px;font-weight:600}
-.cal-head button{width:38px;height:38px;border-radius:50%;background:var(--paper);border:1px solid var(--line);font-size:17px}
+.cal-head button{width:44px;height:44px;border-radius:50%;background:var(--paper);border:1px solid var(--line);font-size:17px}
 .cal{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 10px 14px;margin-bottom:16px}
 .cal .dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:6px}
 .cal .grid{display:grid;grid-template-columns:repeat(7,1fr);row-gap:4px}
@@ -147,7 +148,7 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;st
 
 /* ---------- Earnings ---------- */
 .seg{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:4px;margin-bottom:18px}
-.seg button{flex:1;padding:9px 0;border-radius:999px;font-weight:700;font-size:14px;color:var(--muted)}
+.seg button{flex:1;padding:12px 0;border-radius:999px;font-weight:700;font-size:14px;color:var(--muted)}
 .seg button.on{background:var(--ink);color:#fff}
 .earn-strip{
   background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -212,13 +213,13 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;st
 .fld-row .fld{flex:1}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{
-  padding:8px 14px;border-radius:999px;background:var(--paper);border:1px solid var(--line);
-  font-size:13.5px;font-weight:600;
+  padding:11px 16px;border-radius:999px;background:var(--paper);border:1px solid var(--line);
+  font-size:13.5px;font-weight:600;min-height:44px;
 }
 .chip.on{background:var(--rose);border-color:var(--rose);color:#fff}
 .tipbtns{display:flex;gap:8px}
 .tipbtns button{
-  flex:1;padding:11px 0;border-radius:var(--r-md);background:var(--paper);border:1px solid var(--line);
+  flex:1;padding:13px 0;border-radius:var(--r-md);background:var(--paper);border:1px solid var(--line);
   font-weight:700;font-size:14px;
 }
 .tipbtns button.on{background:var(--sage);border-color:var(--sage);color:#fff}
@@ -361,7 +362,7 @@ function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt
 function bindApptRows(root){
   root.querySelectorAll('.appt').forEach(el=>{
     el.onclick=()=>apptDetail(el.dataset.id);
-    el.onkeydown=e=>{if(e.key==='Enter')apptDetail(el.dataset.id);};
+    el.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')apptDetail(el.dataset.id);};
   });
 }
 
@@ -416,7 +417,8 @@ function renderCal(){
     const key=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     cells.push({d,dim:false,key});
   }
-  while(cells.length%7)cells.push({d:cells.length%7,dim:true,key:null});
+  let nextD=1;
+  while(cells.length%7)cells.push({d:nextD++,dim:true,key:null});
   const hasAppt=k=>db.appts.some(a=>a.date===k&&a.status!=='cancelled');
   const t=todayStr();
   const monthName=first.toLocaleDateString('en-US',{month:'long',year:'numeric'});
@@ -471,7 +473,7 @@ function renderClients(){
     const el=document.getElementById('cq');el.setSelectionRange(el.value.length,el.value.length);};
   main.querySelectorAll('.client').forEach(el=>{
     el.onclick=()=>clientDetail(el.dataset.id);
-    el.onkeydown=e=>{if(e.key==='Enter')clientDetail(el.dataset.id);};
+    el.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')clientDetail(el.dataset.id);};
   });
 }
 
@@ -776,7 +778,6 @@ function renderEarn(){
     <div class="chart">
       ${bdata.map(b=>{
         const tot=b.svc+b.tip,h=Math.round(tot/maxV*100);
-        const tipH=tot?Math.round(b.tip/tot*h):0;
         return`<div class="col">
           <div class="bar" style="height:${Math.max(h,tot?4:3)}%">
             <div class="svcfill" style="height:100%"></div>
@@ -812,7 +813,7 @@ function renderEarn(){
   if(stF)stF.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{earnStaff=c.dataset.st;render();});
   main.querySelectorAll('.exp-row').forEach(el=>{
     el.onclick=()=>expenseForm(el.dataset.id);
-    el.onkeydown=ev=>{if(ev.key==='Enter')expenseForm(el.dataset.id);};
+    el.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' ')expenseForm(el.dataset.id);};
   });
 }
 
@@ -936,7 +937,7 @@ function buildCSV(){
     ].map(csvCell).join(','));
   });
   db.expenses.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
-    rows.push(['Expense',e.date,'','','','','',e.amount,0,e.amount,'','','',e.note||''].map(csvCell).join(','));
+    rows.push(['Expense',e.date,'','','','','',e.amount,0,e.amount,'','',e.category,e.note||''].map(csvCell).join(','));
   });
   return rows.join('\r\n');
 }
