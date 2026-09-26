@@ -305,6 +305,7 @@ function initials(n){return n.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('
 let view='today';
 let calCursor=new Date(); calCursor.setDate(1);
 let calSel=todayStr();
+let calFocusSel=false; /* restore focus to the selected day after keyboard selection */
 let earnMode='day';
 let earnStaff='all';
 let clientQ='';
@@ -332,7 +333,9 @@ function render(){
   else if(view==='clients')renderClients();
   else renderEarn();
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
-  document.getElementById('fab').style.display='flex';
+  const fab=document.getElementById('fab');
+  fab.style.display='flex';
+  fab.setAttribute('aria-label',view==='clients'?'New client':view==='earn'?'New expense':'New appointment');
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;render();});
 document.getElementById('fab').onclick=()=>{
@@ -359,10 +362,12 @@ function apptRow(a){
   </div>`;
 }
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+/* keyboard activation for row-style buttons: Enter/Space without the Space page-scroll */
+function keyAct(e,fn){if(e.key==='Enter'||e.key===' '){e.preventDefault();fn();}}
 function bindApptRows(root){
   root.querySelectorAll('.appt').forEach(el=>{
     el.onclick=()=>apptDetail(el.dataset.id);
-    el.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')apptDetail(el.dataset.id);};
+    el.onkeydown=e=>keyAct(e,()=>apptDetail(el.dataset.id));
   });
 }
 
@@ -444,8 +449,15 @@ function renderCal(){
   `;
   document.getElementById('pm').onclick=()=>{calCursor.setMonth(m-1);render();};
   document.getElementById('nm').onclick=()=>{calCursor.setMonth(m+1);render();};
-  main.querySelectorAll('.d[data-k]').forEach(el=>el.onclick=()=>{calSel=el.dataset.k;render();});
+  main.querySelectorAll('.d[data-k]').forEach(el=>{
+    el.onclick=()=>{calSel=el.dataset.k;render();};
+    el.tabIndex=0;
+    el.setAttribute('role','button');
+    el.setAttribute('aria-label','Select '+niceDate(el.dataset.k));
+    el.onkeydown=e=>keyAct(e,()=>{calFocusSel=true;calSel=el.dataset.k;render();});
+  });
   bindApptRows(main);
+  if(calFocusSel){calFocusSel=false;const s=main.querySelector('.d.sel');if(s)s.focus();}
 }
 
 /* =========================================================
@@ -473,7 +485,7 @@ function renderClients(){
     const el=document.getElementById('cq');el.setSelectionRange(el.value.length,el.value.length);};
   main.querySelectorAll('.client').forEach(el=>{
     el.onclick=()=>clientDetail(el.dataset.id);
-    el.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')clientDetail(el.dataset.id);};
+    el.onkeydown=e=>keyAct(e,()=>clientDetail(el.dataset.id));
   });
 }
 
@@ -813,7 +825,7 @@ function renderEarn(){
   if(stF)stF.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{earnStaff=c.dataset.st;render();});
   main.querySelectorAll('.exp-row').forEach(el=>{
     el.onclick=()=>expenseForm(el.dataset.id);
-    el.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' ')expenseForm(el.dataset.id);};
+    el.onkeydown=e=>keyAct(e,()=>expenseForm(el.dataset.id));
   });
 }
 
