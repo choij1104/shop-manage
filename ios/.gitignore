@@ -1,0 +1,4 @@
+# Generated on every build (CI runs `npx cap add ios`); never edit by hand
+ios/
+www/
+node_modules/

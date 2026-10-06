@@ -1,0 +1,160 @@
+# Manual only. Builds the App Store build of Chairbook and uploads it to App Store Connect
+# (TestFlight). Signing is automatic: Xcode creates and renews the distribution certificate and the
+# App Store profile itself, authenticated with an App Store Connect API key. No certificate file,
+# .p12 or provisioning profile is stored anywhere.
+#
+# Repository secrets (Settings > Secrets and variables > Actions), entered by the account holder:
+#   APPSTORE_API_KEY_ID       Key ID of an App Store Connect API key with the Admin role
+#   APPSTORE_API_ISSUER_ID    Issuer ID shown above the key list
+#   APPSTORE_API_PRIVATE_KEY  Full contents of the downloaded AuthKey_XXXX.p8, including the BEGIN/END lines
+#   APPLE_TEAM_ID             10-character Team ID of HAKOYA LLC (developer.apple.com > Membership)
+# Without them the workflow still builds and checks the bundle and the Xcode project, then stops.
+name: iOS build (App Store)
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: "Version shown on the App Store (CFBundleShortVersionString)"
+        required: true
+        default: "1.0"
+concurrency:
+  group: ios-build
+  cancel-in-progress: false
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ios/package-lock.json
+
+      # App Store uploads must be built with a current Xcode / iOS SDK.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build App Store web bundle (bundled fonts, no network)
+        working-directory: ios
+        run: |
+          npm ci
+          npm run build:www
+
+      - name: Generate and prepare the Xcode project
+        working-directory: ios
+        run: |
+          pip3 install --quiet --break-system-packages pillow || pip3 install --quiet pillow
+          npx cap add ios
+          python3 scripts/native-setup.py   # before sync, so pod install reads the iOS 15 Podfile
+          npx cap sync ios
+
+      - name: Check signing secrets
+        id: secrets
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          [ -n "$KEY_ID" ] || missing="$missing APPSTORE_API_KEY_ID"
+          [ -n "$ISSUER" ] || missing="$missing APPSTORE_API_ISSUER_ID"
+          [ -n "$KEY" ]    || missing="$missing APPSTORE_API_PRIVATE_KEY"
+          [ -n "$TEAM" ]   || missing="$missing APPLE_TEAM_ID"
+          if [ -n "$missing" ]; then
+            echo "::warning::Missing secrets:$missing. Bundle and Xcode project were built; archive and upload skipped."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The archive is built unsigned: automatic signing at archive time asks for a Development
+      # profile, which Apple only issues for a team with registered devices. The export step signs
+      # for distribution with a cloud-managed certificate, which needs no device.
+      - name: Archive (unsigned)
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          MARKETING_VERSION: ${{ inputs.marketing_version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey_$KEY_ID.p8"
+          # Rebuild a clean PEM from whatever was pasted into the secret: a key copied from a
+          # Windows editor can carry a BOM, CRLF line ends, or lose its line breaks altogether,
+          # and xcodebuild then rejects it as an invalid PEM document. The key is never printed.
+          umask 077
+          printf '%s' "$KEY" | python3 -c '
+          import sys, re, base64, textwrap
+          raw = sys.stdin.read().replace("﻿", "")
+          body = re.sub(r"-----(BEGIN|END)[A-Z ]*-----", "", raw)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          try:
+              der = base64.b64decode(body, validate=True)
+          except Exception:
+              sys.exit("APPSTORE_API_PRIVATE_KEY is not base64 PEM content. Paste the whole .p8 file.")
+          if len(der) < 100:
+              sys.exit(f"APPSTORE_API_PRIVATE_KEY is too short ({len(der)} bytes) to be a .p8 key. Was the Key ID pasted instead?")
+          sys.stdout.write("-----BEGIN PRIVATE KEY-----\n" + "\n".join(textwrap.wrap(body, 64)) + "\n-----END PRIVATE KEY-----\n")
+          ' > "$KEY_PATH"
+          openssl pkey -in "$KEY_PATH" -noout 2>/dev/null \
+            || { echo "::error::APPSTORE_API_PRIVATE_KEY does not parse as a private key. Re-paste the full .p8 file contents."; exit 1; }
+          echo "API key: PEM OK; Key ID length ${#KEY_ID}; Issuer ID length ${#ISSUER}; Team ID length ${#TEAM}"
+          xcodebuild archive \
+            -workspace ios/ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Chairbook.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER" \
+            DEVELOPMENT_TEAM="$TEAM" \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            MARKETING_VERSION="$MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E '^(\*\*|error:|warning: .*sign)' || true
+          test -d "$RUNNER_TEMP/Chairbook.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :ApplicationProperties' "$RUNNER_TEMP/Chairbook.xcarchive/Info.plist"
+
+      - name: Sign for distribution and upload to App Store Connect
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Chairbook.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey_$KEY_ID.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER"
+          echo "Uploaded build ${{ inputs.marketing_version }} (${{ github.run_number }}). It appears in App Store Connect > TestFlight after processing (usually 10-30 min)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8

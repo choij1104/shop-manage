@@ -1,0 +1,9 @@
+{
+  "appId": "com.hakoya.chairbook",
+  "appName": "Chairbook",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#FBF4F3"
+  }
+}
