@@ -121,3 +121,20 @@ shutil.copy(os.path.join(FS, "fraunces", "LICENSE"), os.path.join(OUT, "fonts", 
 shutil.copy(os.path.join(FS, "karla", "LICENSE"), os.path.join(OUT, "fonts", "OFL-Karla.txt"))
 n_fonts = len([f for f in os.listdir(os.path.join(OUT, "fonts")) if f.endswith(".woff2")])
 print(f"build-store: Chairbook written to {OUT} ({len(t)} bytes, {n_fonts} font files)")
+
+# Capacitor JS runtime -------------------------------------------------------------------
+# The native bridge injected by Capacitor iOS provides isNativePlatform() and nativePromise()
+# but not registerPlugin(); that comes from @capacitor/core. Ship its browser build and load it
+# before any app script, so Capacitor.registerPlugin() works in the app.
+_src = os.path.join(IOS, "node_modules", "@capacitor", "core", "dist", "capacitor.js")
+if not os.path.isfile(_src):
+    die("@capacitor/core dist/capacitor.js missing: run npm install in ios/ first")
+shutil.copy(_src, os.path.join(OUT, "capacitor.js"))
+_index = os.path.join(OUT, "index.html")
+_html = open(_index, encoding="utf-8").read()
+_i = _html.find("<script")
+if _i < 0:
+    die("no <script> tag to load capacitor.js before")
+_html = _html[:_i] + '<script src="capacitor.js"></script>\n' + _html[_i:]
+open(_index, "w", encoding="utf-8").write(_html)
+print("build-store: capacitor.js bundled and loaded before the app scripts")
