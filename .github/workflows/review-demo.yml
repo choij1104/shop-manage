@@ -1,0 +1,93 @@
+# Manual only. Records the app running in the iOS Simulator for App Review (Guideline 2.1
+# "Information Needed"). The demo build adds ios/demo/*.js, which taps through the app on its own;
+# it is never part of the App Store build. The recording is pushed to the review-demo branch.
+name: Review demo recording (simulator)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  demo:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      BUNDLE_ID: com.hakoya.chairbook
+      DEMO_SECONDS: "60"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ios/package-lock.json
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Build web bundle with the demo driver
+        working-directory: ios
+        run: |
+          npm ci
+          npm run build:www
+          mkdir -p www/demo
+          if [ -d demo/assets ]; then cp -R demo/assets/. www/demo/; fi
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("www/index.html")
+          t = p.read_text(encoding="utf-8")
+          inj = "<script>\n" + pathlib.Path("demo/demo-core.js").read_text() + "\n</script>\n<script>\n" + pathlib.Path("demo/script.js").read_text() + "\n</script>\n"
+          assert t.count("</body>") == 1
+          p.write_text(t.replace("</body>", inj + "</body>"), encoding="utf-8")
+          print("demo driver injected")
+          PY
+      - name: Generate and prepare the Xcode project
+        working-directory: ios
+        run: |
+          pip3 install --quiet --break-system-packages pillow || pip3 install --quiet pillow
+          npx cap add ios
+          python3 scripts/native-setup.py
+          npx cap sync ios
+      - name: Build for the simulator
+        run: |
+          xcodebuild build \
+            -workspace ios/ios/App/App.xcworkspace -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/build.log" | grep -E '^(\*\*|.*error:)' || true
+          grep -q '\*\* BUILD SUCCEEDED \*\*' "$RUNNER_TEMP/build.log" || { tail -60 "$RUNNER_TEMP/build.log"; exit 1; }
+      - name: Record on an iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys,re
+          d=json.load(sys.stdin)["devices"]
+          best=None
+          for rt,devs in d.items():
+              m=re.search(r"iOS-(\d+)-(\d+)",rt)
+              if not m: continue
+              v=(int(m.group(1)),int(m.group(2)))
+              for x in devs:
+                  if x["name"].startswith("iPhone") and "Pro" in x["name"] and "Max" not in x["name"]:
+                      if best is None or v>best[0]: best=(v,x["udid"],x["name"])
+          print(best[1]); sys.stderr.write("device %s iOS %s\n"%(best[2],best[0]))
+          ')
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light || true
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name App.app -path '*iphonesimulator*' | head -1)
+          xcrun simctl install "$UDID" "$APP"
+          sleep 8
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/demo.mov" &
+          REC=$!
+          sleep 4
+          xcrun simctl launch "$UDID" "$BUNDLE_ID"
+          sleep "$DEMO_SECONDS"
+          kill -INT $REC; wait $REC || true
+          ls -la "$RUNNER_TEMP/demo.mov"
+      - name: Publish the recording to the review-demo branch
+        run: |
+          git config user.name "HAKOYA CI"; git config user.email "admin@hakoyallc.com"
+          git checkout --orphan review-demo
+          git rm -rf --cached . >/dev/null
+          mkdir -p out && cp "$RUNNER_TEMP/demo.mov" "out/review-demo-${{ github.run_number }}.mov"
+          git add out && git commit -m "Review demo recording ${{ github.run_number }}" >/dev/null
+          git push -f origin review-demo
