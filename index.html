@@ -794,7 +794,7 @@ function showP2P(a,app,amount,tip){
    Square. Square sends the result back to Chairbook, which records
    the payment. No card data ever passes through Chairbook.
    ========================================================= */
-const SQ_DEFAULT_APP_ID='';                 // HAKOYA's Square application ID (Point of Sale API)
+const SQ_DEFAULT_APP_ID='sq0idp-Y4IbdMYy9SoI5Bka0S1bVQ';                 // HAKOYA's Square application ID (Point of Sale API)
 const SQ_PENDING='chairbook_sq_pending';
 function sqAppId(){return (db.square&&db.square.appId)||SQ_DEFAULT_APP_ID;}
 function isNativeApp(){const C=window.Capacitor;return !!(C&&C.isNativePlatform&&C.isNativePlatform());}
