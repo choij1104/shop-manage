@@ -1,0 +1,114 @@
+# Builds the Google Play build of Chairbook as an Android App Bundle (.aab).
+#
+# Same web bundle as the App Store build: ios/scripts/build-store.py run on the index.html of
+# the commit that App Store build 3 (version 1.0) was made from, APP_SOURCE below. Later web
+# changes (Payment Connect) are not in the store builds until both stores get an update.
+# Bundled fonts, no network. Capacitor 8, targetSdk 36. The Capacitor runtime (capacitor.js)
+# is replaced with the Android project's own @capacitor/core so it matches the native bridge.
+#
+# The bundle is built UNSIGNED. No signing key is stored in this repository or its secrets.
+# The upload key is held by the account holder; the bundle is signed with it outside CI
+# (jarsigner) before it is uploaded to Play Console, and Google re-signs it with the app
+# signing key (Play App Signing).
+#
+# Runs on a push to the `android-build` branch or by manual dispatch. The unsigned bundle is
+# kept as a workflow artifact and also committed to the `android-artifacts` branch
+# (dist/chairbook-<version>-<code>-unsigned.aab) so it can be fetched with plain git.
+name: Android build (Google Play)
+on:
+  push:
+    branches: [android-build]
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Version shown on Google Play (versionName)"
+        required: true
+        default: "1.0"
+permissions:
+  contents: write
+concurrency:
+  group: android-build
+  cancel-in-progress: false
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION_NAME: ${{ inputs.version_name || '1.0' }}
+      APP_SOURCE: d87aa5db8d70ef7e1a583bd04a33005790bf0f34   # App Store 1.0 (build 3)
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Use the web app as submitted to the App Store
+        run: |
+          git fetch --depth 1 origin "$APP_SOURCE"
+          git checkout FETCH_HEAD -- index.html
+          if grep -q 'square-commerce' index.html; then echo "index.html is not the App Store source"; exit 1; fi
+
+      - name: Build store web bundle (same as the App Store build)
+        working-directory: ios
+        run: |
+          npm ci
+          npm run build:www
+
+      - name: Copy bundle into the Android project
+        run: |
+          rm -rf android/www
+          cp -r ios/www android/www
+          grep -q '<meta name="chairbook-build" content="store">' android/www/index.html
+
+      - name: Generate and prepare the Android project
+        working-directory: android
+        run: |
+          npm ci
+          cp node_modules/@capacitor/core/dist/capacitor.js www/capacitor.js
+          pip3 install --quiet --break-system-packages pillow || pip3 install --quiet pillow
+          npx cap add android
+          python3 scripts/native-setup.py
+          npx cap sync android
+
+      - name: Build App Bundle (unsigned release)
+        working-directory: android/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
+          ls -l app/build/outputs/bundle/release/
+
+      - name: Collect bundle
+        id: out
+        run: |
+          NAME="chairbook-${VERSION_NAME}-${BUILD_NUMBER}-unsigned.aab"
+          mkdir -p "$RUNNER_TEMP/dist"
+          cp android/android/app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/dist/$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Built $NAME (versionCode $BUILD_NUMBER, versionName $VERSION_NAME). Sign with the upload key before uploading." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.out.outputs.name }}
+          path: ${{ runner.temp }}/dist/${{ steps.out.outputs.name }}
+
+      - name: Commit bundle to the android-artifacts branch
+        run: |
+          cd "$RUNNER_TEMP"
+          git init -q art && cd art
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch -q --depth 1 origin android-artifacts && git checkout -q -b android-artifacts FETCH_HEAD || git checkout -q --orphan android-artifacts
+          mkdir -p dist
+          cp "$RUNNER_TEMP/dist/${{ steps.out.outputs.name }}" dist/
+          echo "${{ steps.out.outputs.name }}" > dist/LATEST
+          git add dist
+          git commit -q -m "Android bundle ${{ steps.out.outputs.name }} from ${{ github.sha }}"
+          git push -q origin android-artifacts

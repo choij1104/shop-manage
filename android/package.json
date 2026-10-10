@@ -1,0 +1,15 @@
+{
+  "name": "chairbook-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Google Play build of Chairbook, wrapped with Capacitor. Uses the same web bundle as the App Store build (ios/www).",
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.4",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

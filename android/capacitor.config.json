@@ -1,0 +1,9 @@
+{
+  "appId": "com.hakoya.chairbook",
+  "appName": "Chairbook",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#FBF4F3",
+    "allowMixedContent": false
+  }
+}
