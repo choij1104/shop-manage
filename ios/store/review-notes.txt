@@ -1,0 +1,23 @@
+Chairbook 1.1 is a substantial update made in response to the Guideline 4.3(a)/(b) and 4.2.6 review of version 1.0 (October 16, 2026).
+
+WHAT CHANGED IN 1.1 (native iOS code written for Chairbook only)
+1. Booking reminders and rebooking nudges (UserNotifications, BookingAlertsPlugin.swift). A local notification fires before each booking (Settings > Reminders: off, 15 min, 30 min, 1 hour, 2 hours). A "Time to rebook" notification is scheduled a set number of weeks after a completed visit and is skipped when the client's next visit is already booked. Notifications carry actions ("Open booking", "Book next visit") that open the matching screen. Notification permission is requested only after the first booking is saved, or from Settings.
+2. Add to Calendar (EventKit / EventKitUI, CalendarHandoffPlugin.swift). A booking opens Apple's event editor pre-filled with client, service, start, length and notes. On iOS 17 and later the editor needs no calendar permission; on iOS 15 and 16 calendar access is requested the first time the button is used (NSCalendarsUsageDescription). Chairbook never reads existing events.
+3. Siri, Spotlight and Shortcuts (App Intents, ChairbookIntents.swift): "Show today's bookings in Chairbook", "Log a payment in Chairbook" (opens checkout for the client in the chair now), "Book an appointment in Chairbook". App Shortcuts are offered on iOS 17 and later.
+4. Haptic feedback (UIKit feedback generators, TactilePlugin.swift) when a booking is saved, a payment is recorded, or a section changes.
+5. New interface and identity: dark graphite and champagne theme, a floating capsule dock, a day rail on Today with open gaps and a "Now" line, booking lengths, rebooking badges on the client list, and a new app icon.
+6. Square Point of Sale now returns to Chairbook through the chairbook:// URL scheme so card payments are recorded automatically.
+
+HOW TO TEST (no account or sign-in exists)
+- On first launch, tap "See it with example data" on Today. This fills Today, Calendar, Clients and Money with sample bookings.
+- Reminders: tap + and book any service 1 to 2 hours from now. Allow notifications when asked. Settings (gear on Today) > Reminders > "15 min" makes it fire quickly. The notification appears 15 minutes before the booking time.
+- Add to Calendar: tap a booked appointment > Add to Calendar. Apple's editor opens; tap Add.
+- Rebooking nudge: tap a booked appointment > Finish & take payment > Done. Open the client (Clients tab): "Rebooking reminder" shows the date; the chips 3/4/6/8 weeks change it.
+- Siri / Shortcuts: open the Shortcuts app > App Shortcuts > Chairbook, or say "Log a payment in Chairbook".
+- Square: requires the Square Point of Sale app and a Square account; every other payment method (cash, card, Venmo, Zelle, Cash App QR) works without any third-party app.
+
+DATA AND PRIVACY
+All data is stored on the device. The app makes no network requests, has no analytics, no ads and no tracking. CSV export and backups go through the iOS share sheet.
+
+ANSWERS TO THE 4.3 QUESTIONS
+Chairbook is a standalone app for hairstylists and small salons. It shares no code with other apps on this developer account beyond Apple frameworks and the open-source Capacitor runtime; its Swift plugins, interface and data model were written for Chairbook. It was not built from a template, a theme, or an app-generation service, and it is not a re-skin of another app.

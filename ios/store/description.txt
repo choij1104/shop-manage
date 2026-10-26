@@ -1,0 +1,32 @@
+Chairbook is an appointment book and money tracker made for hairstylists, barbers and small salons. It runs on your iPhone only: no account, no sign-up, no internet connection needed, and your client list never leaves your phone.
+
+YOUR DAY ON ONE RAIL
+Today opens on a single timeline of your bookings. Each client sits on the rail at their time with the service, its length and the price. Open gaps between clients are marked, so you can see at a glance where a walk-in fits, and a "Now" line shows where you are in the day. Above it, today's take shows what you have already taken, what is still booked, tips, and how many clients have been in the chair.
+
+REMINDERS ON YOUR IPHONE
+- A heads-up before every booking: 15 minutes, 30 minutes, 1 hour or 2 hours ahead, your choice.
+- A rebooking nudge a few weeks after a visit ("Time to rebook Dana?"), skipped automatically when the next visit is already booked. Tap "Book next visit" on the notification and Chairbook opens a new booking for that client.
+- All reminders are scheduled on the device. Nothing is sent to your clients or to any server.
+
+ADD TO CALENDAR
+Send any booking to the iPhone Calendar with Apple's own event editor, already filled in with the client, service, time, length and notes. Or text the client a friendly reminder from the booking in one tap.
+
+SIRI AND SHORTCUTS
+"Show today's bookings in Chairbook", "Log a payment in Chairbook" and "Book an appointment in Chairbook" work from Siri, Spotlight and the Shortcuts app. "Log a payment" opens checkout for the client in your chair right now.
+
+CHECKOUT WITH TIPS
+Enter the service amount, tap 15, 18, 20 or 25 percent or type a custom tip, and record how they paid: cash, card, Venmo, Zelle, Cash App or other. Show your client a QR code for Cash App or Venmo with the amount already filled in, or hand the amount to the Square Point of Sale app to take the card on your Square reader.
+
+CLIENTS
+Phone numbers, notes such as color formulas and preferences, total spent and the history of every visit. Search by name or phone.
+
+EARNINGS
+Services, tips, client count, expenses and net for the day, the week or the month, with a chart of the last days or months. Add supplies, rent, products and utilities as expenses.
+
+TEAM
+Working with others? Add stylists, assign each booking, and see earnings per person. Leave the team empty and Chairbook stays a simple solo book.
+
+YOUR DATA
+Export everything to a CSV spreadsheet for your accountant (opens in Numbers or Excel) and import it again later. Save a full backup file to Files, Mail or AirDrop and restore it on a new phone.
+
+Chairbook is a one-time purchase with no subscription, no ads and no tracking.
